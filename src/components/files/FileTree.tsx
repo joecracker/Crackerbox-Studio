@@ -10,6 +10,7 @@ interface FileTreeProps {
   forceExpand?: boolean;
   onToggle: (path: string) => void;
   onSelect: (path: string) => void;
+  onContextMenuFile?: (path: string, x: number, y: number) => void;
 }
 
 interface VisibleNode {
@@ -24,6 +25,7 @@ export default function FileTree({
   forceExpand = false,
   onToggle,
   onSelect,
+  onContextMenuFile,
 }: FileTreeProps) {
   const nodeRefs = useRef(new Map<string, HTMLDivElement>());
   const [focusedPath, setFocusedPath] = useState<string | null>(null);
@@ -125,6 +127,7 @@ export default function FileTree({
             onFocus={() => setFocusedPath(node.path)}
             onToggle={() => onToggle(node.path)}
             onSelect={() => onSelect(node.path)}
+            onContextMenu={onContextMenuFile}
           />
         ))
       )}

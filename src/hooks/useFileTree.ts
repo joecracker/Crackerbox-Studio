@@ -44,6 +44,11 @@ export function useFileTree(files: DemoFile[]) {
     setActivePath(path);
   };
 
+  const openFile = (path: string) => {
+    expandTo(path);
+    setActivePath(path);
+  };
+
   const deselectFile = () => setActivePath(null);
 
   const filtered = useMemo(() => {
@@ -66,6 +71,7 @@ export function useFileTree(files: DemoFile[]) {
     activePath,
     activeFile: activePath ? findNode(files, activePath) : undefined,
     selectFile,
+    openFile,
     deselectFile,
     expanded,
     toggleExpanded,

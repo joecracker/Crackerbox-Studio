@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import AppHeader from "./components/layout/AppHeader";
 import PanelResizer from "./components/layout/PanelResizer";
 import Sidebar from "./components/layout/Sidebar";
@@ -10,8 +11,10 @@ import TokenCounter from "./components/parameters/TokenCounter";
 import ZenView from "./components/zen/ZenView";
 import CommandPalette from "./components/commands/CommandPalette";
 import ShortcutsDialog from "./components/commands/ShortcutsDialog";
+import ContextMenu from "./components/commands/ContextMenu";
 import type { PaletteCommand } from "./components/commands/CommandPalette";
 import type { ShortcutItem } from "./components/commands/ShortcutsDialog";
+import type { ContextMenuItem } from "./components/commands/ContextMenu";
 import {
   FILE_TREE_MAX,
   FILE_TREE_MIN,
@@ -54,6 +57,11 @@ export default function App() {
   const [parametersOpen, setParametersOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    targetPath: string | null;
+  } | null>(null);
   const paletteOpenRef = useRef(paletteOpen);
   paletteOpenRef.current = paletteOpen;
   const fileTree = useFileTree(demoFiles);
@@ -62,7 +70,7 @@ export default function App() {
   const deselectFileRef = useRef<() => void>(() => {});
   deselectFileRef.current = fileTree.deselectFile;
 
-  const dialogOpen = parametersOpen || paletteOpen || shortcutsOpen;
+  const dialogOpen = parametersOpen || paletteOpen || shortcutsOpen || contextMenu !== null;
   const dialogOpenRef = useRef(dialogOpen);
   dialogOpenRef.current = dialogOpen;
 
@@ -80,7 +88,24 @@ export default function App() {
     setParametersOpen(false);
   };
 
-  const paletteCommands: PaletteCommand[] = [
+  const handleShellContextMenu = (e: ReactMouseEvent) => {
+    if (
+      e.target instanceof HTMLInputElement ||
+      e.target instanceof HTMLTextAreaElement ||
+      e.target instanceof HTMLSelectElement
+    ) {
+      return;
+    }
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, targetPath: null });
+  };
+
+  const handleFileContextMenu = (path: string, x: number, y: number) => {
+    fileTree.openFile(path);
+    setContextMenu({ x, y, targetPath: path });
+  };
+
+  const coreCommands: PaletteCommand[] = [
     { id: "toggle-sidebar", label: "Toggle sidebar", shortcut: "Ctrl+B", run: handleToggleSidebar },
     {
       id: "toggle-filetree",
@@ -106,6 +131,10 @@ export default function App() {
       shortcut: "Ctrl+Alt+Z",
       run: toggleZen,
     },
+  ];
+
+  const paletteCommands: PaletteCommand[] = [
+    ...coreCommands,
     { id: "close-file", label: "Close current file", run: fileTree.deselectFile },
     {
       id: "keyboard-shortcuts",
@@ -121,6 +150,47 @@ export default function App() {
       }),
     ),
   ];
+
+  const contextMenuItems: ContextMenuItem[] = [];
+  if (contextMenu) {
+    const path = contextMenu.targetPath;
+    if (path) {
+      contextMenuItems.push({
+        id: "open-file",
+        label: "Open file",
+        run: () => fileTree.openFile(path),
+      });
+      contextMenuItems.push({
+        id: "copy-path",
+        label: "Copy path",
+        run: () => {
+          void navigator.clipboard.writeText(path);
+        },
+      });
+      if (fileTree.activePath === path) {
+        contextMenuItems.push({
+          id: "close-file",
+          label: "Close file",
+          run: () => fileTree.deselectFile(),
+        });
+      }
+    }
+    coreCommands.forEach((command, i) => {
+      contextMenuItems.push({
+        id: command.id,
+        label: command.label,
+        shortcut: command.shortcut,
+        separatorBefore: path !== null && i === 0,
+        run: command.run,
+      });
+    });
+    contextMenuItems.push({
+      id: "keyboard-shortcuts",
+      label: "Keyboard shortcuts",
+      separatorBefore: true,
+      run: () => setShortcutsOpen(true),
+    });
+  }
 
   const shortcuts: ShortcutItem[] = [
     { label: "Toggle command palette", combo: "Ctrl+K" },
@@ -207,7 +277,11 @@ export default function App() {
 
   return (
     <>
-      <div ref={shellRef} className="flex h-screen flex-col bg-zinc-950 text-zinc-100">
+      <div
+        ref={shellRef}
+        className="flex h-screen flex-col bg-zinc-950 text-zinc-100"
+        onContextMenu={handleShellContextMenu}
+      >
         <AppHeader
           fileTreeCollapsed={fileTreeCollapsed}
           onToggleFileTree={handleToggleFileTree}
@@ -232,6 +306,7 @@ export default function App() {
             onSelect={fileTree.selectFile}
             onToggle={fileTree.toggleExpanded}
             onQueryChange={fileTree.setQuery}
+            onContextMenuFile={handleFileContextMenu}
           />
           {!fileTreeCollapsed && (
             <PanelResizer
@@ -283,6 +358,14 @@ export default function App() {
       )}
       {shortcutsOpen && (
         <ShortcutsDialog shortcuts={shortcuts} onClose={() => setShortcutsOpen(false)} />
+      )}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenuItems}
+          onClose={() => setContextMenu(null)}
+        />
       )}
     </>
   );

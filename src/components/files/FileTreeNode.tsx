@@ -10,6 +10,7 @@ interface FileTreeNodeProps {
   onFocus: () => void;
   onToggle: () => void;
   onSelect: () => void;
+  onContextMenu?: (path: string, x: number, y: number) => void;
 }
 
 function CaretIcon({ open }: { open: boolean }) {
@@ -51,6 +52,7 @@ export function FileTreeNode({
   onFocus,
   onToggle,
   onSelect,
+  onContextMenu,
 }: FileTreeNodeProps) {
   const isFolder = node.type === "folder";
   return (
@@ -63,6 +65,12 @@ export function FileTreeNode({
       tabIndex={tabIndex}
       onFocus={onFocus}
       onClick={isFolder ? onToggle : onSelect}
+      onContextMenu={(e) => {
+        if (isFolder || !onContextMenu) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onContextMenu(node.path, e.clientX, e.clientY);
+      }}
       className={`flex cursor-pointer select-none items-center gap-1.5 rounded-md py-1 pr-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-sky-400 ${
         active
           ? "bg-zinc-800 font-medium text-zinc-100"

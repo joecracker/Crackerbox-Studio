@@ -12,6 +12,7 @@ interface FileTreePanelProps {
   onSelect: (path: string) => void;
   onToggle: (path: string) => void;
   onQueryChange: (query: string) => void;
+  onContextMenuFile?: (path: string, x: number, y: number) => void;
 }
 
 export default function FileTreePanel({
@@ -25,6 +26,7 @@ export default function FileTreePanel({
   onSelect,
   onToggle,
   onQueryChange,
+  onContextMenuFile,
 }: FileTreePanelProps) {
   return (
     <aside
@@ -67,6 +69,7 @@ export default function FileTreePanel({
           forceExpand={query.trim().length > 0}
           onToggle={onToggle}
           onSelect={onSelect}
+          onContextMenuFile={onContextMenuFile}
         />
         <div className="mt-auto shrink-0 truncate border-t border-zinc-800 px-3 py-2 text-[11px] text-zinc-500">
           {activePath ? activePath : "No file selected"}
