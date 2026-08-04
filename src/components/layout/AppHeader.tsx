@@ -8,6 +8,8 @@ interface AppHeaderProps {
   zenActive: boolean;
   onToggleZen: () => void;
   zenToggleRef?: Ref<HTMLButtonElement>;
+  parametersCollapsed: boolean;
+  onToggleParameters: () => void;
 }
 
 export default function AppHeader({
@@ -18,6 +20,8 @@ export default function AppHeader({
   zenActive,
   onToggleZen,
   zenToggleRef,
+  parametersCollapsed,
+  onToggleParameters,
 }: AppHeaderProps) {
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b border-zinc-800 bg-zinc-950 px-3">
@@ -51,6 +55,26 @@ export default function AppHeader({
         </svg>
       </button>
       <span className="text-sm font-semibold tracking-tight text-zinc-100">Cracker Box</span>
+      <button
+        type="button"
+        onClick={onToggleParameters}
+        aria-label={parametersCollapsed ? "Show parameters" : "Hide parameters"}
+        aria-expanded={!parametersCollapsed}
+        aria-controls="app-parameters"
+        className="ml-auto flex h-8 w-8 items-center justify-center rounded-md text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path
+            d="M2.5 4h11M2.5 8h11M2.5 12h11"
+            stroke="currentColor"
+            strokeWidth="1.3"
+            strokeLinecap="round"
+          />
+          <circle cx="6" cy="4" r="1.2" fill="#09090b" stroke="currentColor" strokeWidth="1.2" />
+          <circle cx="10" cy="8" r="1.2" fill="#09090b" stroke="currentColor" strokeWidth="1.2" />
+          <circle cx="5" cy="12" r="1.2" fill="#09090b" stroke="currentColor" strokeWidth="1.2" />
+        </svg>
+      </button>
       <button
         ref={zenToggleRef}
         type="button"
