@@ -1,11 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { Model } from "../../data/models";
 import type { ParametersState } from "../../hooks/useParameters";
 
-interface ParametersPanelProps {
-  width: number;
-  collapsed: boolean;
-  transitioning: boolean;
+interface ParametersDialogProps {
+  onClose: () => void;
   parameters: ParametersState;
   models: Model[];
   loading: boolean;
@@ -18,16 +16,14 @@ function formatPrice(price: number): string {
   return `$${perMillion.toFixed(2)}/M`;
 }
 
-export default function ParametersPanel({
-  width,
-  collapsed,
-  transitioning,
+export default function ParametersDialog({
+  onClose,
   parameters,
   models,
   loading,
   error,
   onReload,
-}: ParametersPanelProps) {
+}: ParametersDialogProps) {
   const {
     selectedModelId,
     setSelectedModelId,
@@ -41,9 +37,14 @@ export default function ParametersPanel({
     setFreeOnly,
   } = parameters;
 
+  const closeRef = useRef<HTMLButtonElement>(null);
   const list = freeOnly ? models.filter((m) => m.isFree) : models;
   const selectedModel = models.find((m) => m.id === selectedModelId);
   const selectDisabled = loading || models.length === 0;
+
+  useEffect(() => {
+    closeRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     if (loading || list.length === 0) return;
@@ -53,26 +54,41 @@ export default function ParametersPanel({
   }, [list, loading, selectedModelId, setSelectedModelId]);
 
   return (
-    <aside
-      id="app-parameters"
-      ref={(el) => {
-        if (el) el.inert = collapsed;
-      }}
-      aria-label="Generation parameters"
-      className={collapsed ? "shrink-0" : "shrink-0 border-l border-zinc-800"}
-      style={{
-        width: collapsed ? 0 : width,
-        overflow: "hidden",
-        transition: transitioning ? "width 180ms ease" : "none",
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/70"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div style={{ width, minWidth: width }} className="flex h-full flex-col bg-zinc-950">
-        <header className="flex h-9 shrink-0 items-center border-b border-zinc-800 px-3">
-          <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="parameters-title"
+        onKeyDown={(e) => {
+          if (e.key === "Escape") onClose();
+        }}
+        className="flex max-h-[85vh] w-[540px] max-w-[calc(100vw-2rem)] flex-col rounded-lg border border-zinc-800 bg-zinc-900 shadow-2xl"
+      >
+        <header className="flex h-11 shrink-0 items-center justify-between border-b border-zinc-800 px-4">
+          <h2
+            id="parameters-title"
+            className="text-sm font-semibold uppercase tracking-wider text-zinc-300"
+          >
             Parameters
-          </span>
+          </h2>
+          <button
+            ref={closeRef}
+            type="button"
+            onClick={onClose}
+            aria-label="Close parameters"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </button>
         </header>
-        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+        <div className="min-h-0 overflow-y-auto px-4 py-4">
           <label
             htmlFor="param-model"
             className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500"
@@ -188,6 +204,6 @@ export default function ParametersPanel({
           </div>
         </div>
       </div>
-    </aside>
+    </div>
   );
 }

@@ -8,9 +8,6 @@ export const SIDEBAR_MAX = 720;
 export const FILE_TREE_MIN = 180;
 export const FILE_TREE_MAX = 480;
 
-export const PARAMETERS_MIN = 240;
-export const PARAMETERS_MAX = 480;
-
 export const PREVIEW_MIN_RATIO = 0.4;
 export const PREVIEW_MAX_RATIO = 0.66;
 export const PREVIEW_DEFAULT_RATIO = 0.5;
@@ -24,8 +21,6 @@ export interface LayoutState {
   previewWidth: number;
   fileTreeWidth: number;
   fileTreeCollapsed: boolean;
-  parametersWidth: number;
-  parametersCollapsed: boolean;
 }
 
 const DEFAULT_LAYOUT: LayoutState = {
@@ -34,8 +29,6 @@ const DEFAULT_LAYOUT: LayoutState = {
   previewWidth: Math.round(window.innerWidth * PREVIEW_DEFAULT_RATIO),
   fileTreeWidth: 240,
   fileTreeCollapsed: false,
-  parametersWidth: 320,
-  parametersCollapsed: true,
 };
 
 function clamp(n: number, min: number, max: number): number {
@@ -63,15 +56,6 @@ export function useLayout() {
   const toggleFileTree = () =>
     setLayout((prev) => ({ ...prev, fileTreeCollapsed: !prev.fileTreeCollapsed }));
 
-  const setParametersWidth = (width: number) =>
-    setLayout((prev) => ({
-      ...prev,
-      parametersWidth: clamp(width, PARAMETERS_MIN, PARAMETERS_MAX),
-    }));
-
-  const toggleParameters = () =>
-    setLayout((prev) => ({ ...prev, parametersCollapsed: !prev.parametersCollapsed }));
-
   return {
     sidebarWidth: layout.sidebarWidth,
     sidebarCollapsed: layout.sidebarCollapsed,
@@ -85,9 +69,5 @@ export function useLayout() {
     fileTreeCollapsed: layout.fileTreeCollapsed,
     setFileTreeWidth,
     toggleFileTree,
-    parametersWidth: clamp(layout.parametersWidth, PARAMETERS_MIN, PARAMETERS_MAX),
-    parametersCollapsed: layout.parametersCollapsed,
-    setParametersWidth,
-    toggleParameters,
   };
 }

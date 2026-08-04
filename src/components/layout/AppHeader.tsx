@@ -8,8 +8,9 @@ interface AppHeaderProps {
   zenActive: boolean;
   onToggleZen: () => void;
   zenToggleRef?: Ref<HTMLButtonElement>;
-  parametersCollapsed: boolean;
-  onToggleParameters: () => void;
+  parametersOpen: boolean;
+  onOpenParameters: () => void;
+  parametersToggleRef?: Ref<HTMLButtonElement>;
 }
 
 export default function AppHeader({
@@ -20,8 +21,9 @@ export default function AppHeader({
   zenActive,
   onToggleZen,
   zenToggleRef,
-  parametersCollapsed,
-  onToggleParameters,
+  parametersOpen,
+  onOpenParameters,
+  parametersToggleRef,
 }: AppHeaderProps) {
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b border-zinc-800 bg-zinc-950 px-3">
@@ -54,14 +56,14 @@ export default function AppHeader({
           <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
       </button>
-      <span className="text-sm font-semibold tracking-tight text-zinc-100">Cracker Box</span>
       <button
+        ref={parametersToggleRef}
         type="button"
-        onClick={onToggleParameters}
-        aria-label={parametersCollapsed ? "Show parameters" : "Hide parameters"}
-        aria-expanded={!parametersCollapsed}
-        aria-controls="app-parameters"
-        className="ml-auto flex h-8 w-8 items-center justify-center rounded-md text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+        onClick={onOpenParameters}
+        aria-label="Parameters"
+        aria-haspopup="dialog"
+        aria-expanded={parametersOpen}
+        className="flex h-8 w-8 items-center justify-center rounded-md text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <path
@@ -75,6 +77,7 @@ export default function AppHeader({
           <circle cx="5" cy="12" r="1.2" fill="#09090b" stroke="currentColor" strokeWidth="1.2" />
         </svg>
       </button>
+      <span className="text-sm font-semibold tracking-tight text-zinc-100">Cracker Box</span>
       <button
         ref={zenToggleRef}
         type="button"

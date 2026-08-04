@@ -1,18 +1,16 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import AppHeader from "./components/layout/AppHeader";
 import PanelResizer from "./components/layout/PanelResizer";
 import Sidebar from "./components/layout/Sidebar";
 import FileTreePanel from "./components/files/FileTreePanel";
 import FileViewer from "./components/files/FileViewer";
 import LivePreviewPanel from "./components/preview/LivePreviewPanel";
-import ParametersPanel from "./components/parameters/ParametersPanel";
+import ParametersDialog from "./components/parameters/ParametersDialog";
 import TokenCounter from "./components/parameters/TokenCounter";
 import ZenView from "./components/zen/ZenView";
 import {
   FILE_TREE_MAX,
   FILE_TREE_MIN,
-  PARAMETERS_MAX,
-  PARAMETERS_MIN,
   SIDEBAR_MAX,
   SIDEBAR_MIN,
   useLayout,
@@ -38,16 +36,15 @@ export default function App() {
     fileTreeCollapsed,
     setFileTreeWidth,
     toggleFileTree,
-    parametersWidth,
-    parametersCollapsed,
-    setParametersWidth,
-    toggleParameters,
   } = useLayout();
   const [sidebarAnimating, sidebarFlash] = useTransientFlag(220);
   const [treeAnimating, treeFlash] = useTransientFlag(220);
-  const [paramsAnimating, paramsFlash] = useTransientFlag(220);
   const { zen, toggleZen, exitZen } = useZenMode();
   const zenToggleRef = useRef<HTMLButtonElement>(null);
+  const parametersToggleRef = useRef<HTMLButtonElement>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
+  const wasParametersOpenRef = useRef(false);
+  const [parametersOpen, setParametersOpen] = useState(false);
   const fileTree = useFileTree(demoFiles);
   const parameters = useParameters();
   const modelSource = useModels();
@@ -64,9 +61,8 @@ export default function App() {
     toggleFileTree();
   };
 
-  const handleToggleParameters = () => {
-    paramsFlash();
-    toggleParameters();
+  const handleCloseParameters = () => {
+    setParametersOpen(false);
   };
 
   useEffect(() => {
@@ -74,7 +70,15 @@ export default function App() {
   }, [zen]);
 
   useEffect(() => {
-    if (zen) return;
+    if (shellRef.current) shellRef.current.inert = parametersOpen;
+    if (!parametersOpen && wasParametersOpenRef.current) {
+      parametersToggleRef.current?.focus();
+    }
+    wasParametersOpenRef.current = parametersOpen;
+  }, [parametersOpen]);
+
+  useEffect(() => {
+    if (zen || parametersOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -82,23 +86,25 @@ export default function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [zen]);
+  }, [zen, parametersOpen]);
 
   if (zen) return <ZenView onExit={exitZen} />;
 
   return (
-    <div className="flex h-screen flex-col bg-zinc-950 text-zinc-100">
-      <AppHeader
-        fileTreeCollapsed={fileTreeCollapsed}
-        onToggleFileTree={handleToggleFileTree}
-        sidebarCollapsed={sidebarCollapsed}
-        onToggleSidebar={handleToggleSidebar}
-        zenActive={zen}
-        onToggleZen={toggleZen}
-        zenToggleRef={zenToggleRef}
-        parametersCollapsed={parametersCollapsed}
-        onToggleParameters={handleToggleParameters}
-      />
+    <>
+      <div ref={shellRef} className="flex h-screen flex-col bg-zinc-950 text-zinc-100">
+        <AppHeader
+          fileTreeCollapsed={fileTreeCollapsed}
+          onToggleFileTree={handleToggleFileTree}
+          sidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={handleToggleSidebar}
+          zenActive={zen}
+          onToggleZen={toggleZen}
+          zenToggleRef={zenToggleRef}
+          parametersOpen={parametersOpen}
+          onOpenParameters={() => setParametersOpen(true)}
+          parametersToggleRef={parametersToggleRef}
+        />
       <div className="flex min-h-0 flex-1">
         <FileTreePanel
           width={fileTreeWidth}
@@ -137,26 +143,6 @@ export default function App() {
             <TokenCounter />
           </footer>
         </main>
-        {!parametersCollapsed && (
-          <PanelResizer
-            width={parametersWidth}
-            minWidth={PARAMETERS_MIN}
-            maxWidth={PARAMETERS_MAX}
-            onResize={setParametersWidth}
-            invert
-            label="Resize parameters panel"
-          />
-        )}
-        <ParametersPanel
-          width={parametersWidth}
-          collapsed={parametersCollapsed}
-          transitioning={paramsAnimating}
-          parameters={parameters}
-          models={modelSource.models}
-          loading={modelSource.loading}
-          error={modelSource.error}
-          onReload={modelSource.reload}
-        />
         <LivePreviewPanel
           width={previewWidth}
           minWidth={previewMinWidth()}
@@ -164,6 +150,17 @@ export default function App() {
           onResize={setPreviewWidth}
         />
       </div>
-    </div>
+      </div>
+      {parametersOpen && (
+        <ParametersDialog
+          onClose={handleCloseParameters}
+          parameters={parameters}
+          models={modelSource.models}
+          loading={modelSource.loading}
+          error={modelSource.error}
+          onReload={modelSource.reload}
+        />
+      )}
+    </>
   );
 }
