@@ -54,12 +54,8 @@ export default function App() {
   const [parametersOpen, setParametersOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const parametersOpenRef = useRef(parametersOpen);
-  parametersOpenRef.current = parametersOpen;
   const paletteOpenRef = useRef(paletteOpen);
   paletteOpenRef.current = paletteOpen;
-  const shortcutsOpenRef = useRef(shortcutsOpen);
-  shortcutsOpenRef.current = shortcutsOpen;
   const fileTree = useFileTree(demoFiles);
   const parameters = useParameters();
   const modelSource = useModels();
@@ -67,6 +63,8 @@ export default function App() {
   deselectFileRef.current = fileTree.deselectFile;
 
   const dialogOpen = parametersOpen || paletteOpen || shortcutsOpen;
+  const dialogOpenRef = useRef(dialogOpen);
+  dialogOpenRef.current = dialogOpen;
 
   const handleToggleSidebar = () => {
     sidebarFlash();
@@ -138,42 +136,42 @@ export default function App() {
     {
       combo: "Ctrl+K",
       handler: () => {
-        if (parametersOpenRef.current || shortcutsOpenRef.current) return;
+        if (dialogOpenRef.current && !paletteOpenRef.current) return;
         setPaletteOpen((open) => !open);
       },
     },
     {
       combo: "Ctrl+B",
       handler: () => {
-        if (paletteOpenRef.current) return;
+        if (dialogOpenRef.current) return;
         handleToggleSidebar();
       },
     },
     {
       combo: "Ctrl+Shift+E",
       handler: () => {
-        if (paletteOpenRef.current) return;
+        if (dialogOpenRef.current) return;
         handleToggleFileTree();
       },
     },
     {
       combo: "Ctrl+Shift+P",
       handler: () => {
-        if (paletteOpenRef.current) return;
+        if (dialogOpenRef.current) return;
         togglePreview();
       },
     },
     {
       combo: "Ctrl+Shift+,",
       handler: () => {
-        if (paletteOpenRef.current) return;
+        if (dialogOpenRef.current) return;
         setParametersOpen(true);
       },
     },
     {
       combo: "Ctrl+Alt+Z",
       handler: () => {
-        if (parametersOpenRef.current || paletteOpenRef.current || shortcutsOpenRef.current) return;
+        if (dialogOpenRef.current) return;
         toggleZen();
       },
     },
