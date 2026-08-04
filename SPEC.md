@@ -17,7 +17,7 @@ Status: done | in progress | planned
 5. **Command palette, shortcuts, context menu** — done (`1c0629a`, `ddda6c7`, `ac4f103`)
    Ctrl+K command palette, keyboard shortcuts (gated while any dialog is open), shortcut reference overlay, and a right-click context menu with file-specific actions.
 
-6. **Diff-aware edits** — in progress
+6. **Diff-aware edits** — done (`34a8c42`)
    Proposed code changes surface as a line-by-line before/after diff and must be explicitly approved or rejected before being applied to the file tree.
 
 7. **Project library** — planned

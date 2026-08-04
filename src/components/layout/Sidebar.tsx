@@ -1,4 +1,3 @@
-import { useState } from "react";
 import type { ReactNode } from "react";
 
 interface NavItem {
@@ -70,11 +69,19 @@ interface SidebarProps {
   width: number;
   collapsed: boolean;
   transitioning: boolean;
+  activeTab: string;
+  onTabChange: (id: string) => void;
+  children?: ReactNode;
 }
 
-export default function Sidebar({ width, collapsed, transitioning }: SidebarProps) {
-  const [activeId, setActiveId] = useState("chat");
-
+export default function Sidebar({
+  width,
+  collapsed,
+  transitioning,
+  activeTab,
+  onTabChange,
+  children,
+}: SidebarProps) {
   return (
     <aside
       id="app-sidebar"
@@ -95,12 +102,12 @@ export default function Sidebar({ width, collapsed, transitioning }: SidebarProp
         </div>
         <nav role="navigation" aria-label="Primary" className="flex flex-col gap-0.5 px-2">
           {NAV_ITEMS.map((item) => {
-            const active = item.id === activeId;
+            const active = item.id === activeTab;
             return (
               <button
                 key={item.id}
                 type="button"
-                onClick={() => setActiveId(item.id)}
+                onClick={() => onTabChange(item.id)}
                 aria-current={active ? "page" : undefined}
                 className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
                   active
@@ -114,8 +121,12 @@ export default function Sidebar({ width, collapsed, transitioning }: SidebarProp
             );
           })}
         </nav>
-        <div className="mt-auto border-t border-zinc-800 px-3 py-3 text-xs leading-relaxed text-zinc-500">
-          Layout shell in place — chat &amp; preview land next.
+        <div className="min-h-0 flex-1 overflow-hidden">
+          {children ?? (
+            <div className="flex h-full flex-col justify-end border-t border-zinc-800 px-3 py-3 text-xs leading-relaxed text-zinc-500">
+              Chat, deploy, and settings land next.
+            </div>
+          )}
         </div>
       </div>
     </aside>

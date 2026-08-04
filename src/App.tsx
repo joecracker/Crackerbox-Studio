@@ -6,6 +6,8 @@ import Sidebar from "./components/layout/Sidebar";
 import FileTreePanel from "./components/files/FileTreePanel";
 import FileViewer from "./components/files/FileViewer";
 import LivePreviewPanel from "./components/preview/LivePreviewPanel";
+import ProjectLibrary from "./components/projects/ProjectLibrary";
+import ProjectNameDialog from "./components/projects/ProjectNameDialog";
 import ParametersDialog from "./components/parameters/ParametersDialog";
 import TokenCounter from "./components/parameters/TokenCounter";
 import ZenView from "./components/zen/ZenView";
@@ -29,7 +31,8 @@ import { useZenMode } from "./hooks/useZenMode";
 import { useFileTree } from "./hooks/useFileTree";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { useEdits } from "./hooks/useEdits";
-import { demoFiles, flattenFiles } from "./data/demoFiles";
+import { useProjects } from "./hooks/useProjects";
+import { flattenFiles } from "./data/demoFiles";
 import type { DemoFile } from "./data/demoFiles";
 
 function updateFileContent(nodes: DemoFile[], path: string, content: string): DemoFile[] {
@@ -74,15 +77,21 @@ export default function App() {
   } | null>(null);
   const paletteOpenRef = useRef(paletteOpen);
   paletteOpenRef.current = paletteOpen;
-  const [files, setFiles] = useState(demoFiles);
-  const fileTree = useFileTree(files);
+  const [sidebarTab, setSidebarTab] = useState("chat");
+  const [projectDialog, setProjectDialog] = useState<
+    { mode: "create" } | { mode: "rename"; id: string } | null
+  >(null);
+  const projects = useProjects();
+  const activeFiles = projects.activeProject.files;
+  const fileTree = useFileTree(activeFiles);
   const edits = useEdits();
   const parameters = useParameters();
   const modelSource = useModels();
   const deselectFileRef = useRef<() => void>(() => {});
   deselectFileRef.current = fileTree.deselectFile;
 
-  const dialogOpen = parametersOpen || paletteOpen || shortcutsOpen || contextMenu !== null;
+  const dialogOpen =
+    parametersOpen || paletteOpen || shortcutsOpen || contextMenu !== null || projectDialog !== null;
   const dialogOpenRef = useRef(dialogOpen);
   dialogOpenRef.current = dialogOpen;
   const previewAutoHiddenRef = useRef(false);
@@ -119,7 +128,7 @@ export default function App() {
   };
 
   const proposeDemoEdit = (path: string) => {
-    const file = flattenFiles(files).find((f) => f.path === path);
+    const file = flattenFiles(activeFiles).find((f) => f.path === path);
     if (!file || file.content == null) return;
     edits.proposeEdit(path, `${file.content}// pending AI edit (demo — review below)\n`, file.content);
   };
@@ -127,8 +136,23 @@ export default function App() {
   const approveEdit = (id: string) => {
     const edit = edits.pending.find((e) => e.id === id);
     if (!edit) return;
-    setFiles((prev) => updateFileContent(prev, edit.path, edit.newContent));
+    projects.updateActiveFiles((prev) => updateFileContent(prev, edit.path, edit.newContent));
     edits.rejectEdit(id);
+  };
+
+  const handleSwitchProject = (id: string) => {
+    if (id !== projects.activeProjectId) projects.switchProject(id);
+  };
+
+  const handleRenameProject = (id: string) => {
+    setProjectDialog({ mode: "rename", id });
+  };
+
+  const handleSubmitProjectName = (name: string) => {
+    if (!projectDialog) return;
+    if (projectDialog.mode === "create") projects.createProject(name);
+    else projects.renameProject(projectDialog.id, name);
+    setProjectDialog(null);
   };
 
   const pendingPaths = useMemo(() => new Set(edits.pending.map((e) => e.path)), [edits.pending]);
@@ -177,7 +201,7 @@ export default function App() {
       label: "Keyboard shortcuts",
       run: () => setShortcutsOpen(true),
     },
-    ...flattenFiles(files).map(
+    ...flattenFiles(activeFiles).map(
       (f): PaletteCommand => ({
         id: `open:${f.path}`,
         label: `Open file: ${f.name}`,
@@ -335,6 +359,18 @@ export default function App() {
     }
   }, [activePendingEdit, previewCollapsed, togglePreview]);
 
+  const activeProjectIdRef = useRef(projects.activeProjectId);
+  useEffect(() => {
+    if (activeProjectIdRef.current !== projects.activeProjectId) {
+      activeProjectIdRef.current = projects.activeProjectId;
+      edits.clearAll();
+      fileTree.deselectFile();
+      fileTree.setQuery("");
+      setSidebarTab("chat");
+      if (fileTreeCollapsed) handleToggleFileTree();
+    }
+  }, [projects.activeProjectId, edits, fileTree, fileTreeCollapsed, handleToggleFileTree]);
+
   if (zen) return <ZenView onExit={exitZen} />;
 
   return (
@@ -380,7 +416,24 @@ export default function App() {
               label="Resize file tree"
             />
           )}
-          <Sidebar width={sidebarWidth} collapsed={sidebarCollapsed} transitioning={sidebarAnimating} />
+          <Sidebar
+            width={sidebarWidth}
+            collapsed={sidebarCollapsed}
+            transitioning={sidebarAnimating}
+            activeTab={sidebarTab}
+            onTabChange={setSidebarTab}
+          >
+            {sidebarTab === "projects" && (
+              <ProjectLibrary
+                projects={projects.projects}
+                activeProjectId={projects.activeProjectId}
+                onSwitch={handleSwitchProject}
+                onNew={() => setProjectDialog({ mode: "create" })}
+                onRename={handleRenameProject}
+                onDelete={projects.deleteProject}
+              />
+            )}
+          </Sidebar>
           {!sidebarCollapsed && (
             <PanelResizer
               width={sidebarWidth}
@@ -434,6 +487,18 @@ export default function App() {
           y={contextMenu.y}
           items={contextMenuItems}
           onClose={() => setContextMenu(null)}
+        />
+      )}
+      {projectDialog && (
+        <ProjectNameDialog
+          title={projectDialog.mode === "create" ? "New project" : "Rename project"}
+          initialValue={
+            projectDialog.mode === "rename"
+              ? (projects.projects.find((p) => p.id === projectDialog.id)?.name ?? "")
+              : ""
+          }
+          onSubmit={handleSubmitProjectName}
+          onClose={() => setProjectDialog(null)}
         />
       )}
     </>

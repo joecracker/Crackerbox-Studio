@@ -22,5 +22,9 @@ export function useEdits() {
     setPending((prev) => prev.filter((e) => e.id !== id));
   }, []);
 
-  return { pending, proposeEdit, rejectEdit };
+  const clearAll = useCallback(() => {
+    setPending([]);
+  }, []);
+
+  return { pending, proposeEdit, rejectEdit, clearAll };
 }
