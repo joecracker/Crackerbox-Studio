@@ -11,6 +11,7 @@ interface FileTreeProps {
   onToggle: (path: string) => void;
   onSelect: (path: string) => void;
   onContextMenuFile?: (path: string, x: number, y: number) => void;
+  pendingPaths?: Set<string>;
 }
 
 interface VisibleNode {
@@ -26,6 +27,7 @@ export default function FileTree({
   onToggle,
   onSelect,
   onContextMenuFile,
+  pendingPaths,
 }: FileTreeProps) {
   const nodeRefs = useRef(new Map<string, HTMLDivElement>());
   const [focusedPath, setFocusedPath] = useState<string | null>(null);
@@ -128,6 +130,7 @@ export default function FileTree({
             onToggle={() => onToggle(node.path)}
             onSelect={() => onSelect(node.path)}
             onContextMenu={onContextMenuFile}
+            pending={pendingPaths?.has(node.path)}
           />
         ))
       )}

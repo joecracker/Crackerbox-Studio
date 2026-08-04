@@ -1,11 +1,25 @@
 import type { DemoFile } from "../../data/demoFiles";
+import type { PendingEdit } from "../../hooks/useEdits";
+import DiffView from "../diff/DiffView";
 
 interface FileViewerProps {
   file?: DemoFile;
   onClose: () => void;
+  pendingEdit?: PendingEdit;
+  onApprove?: () => void;
+  onReject?: () => void;
 }
 
-export default function FileViewer({ file, onClose }: FileViewerProps) {
+export default function FileViewer({
+  file,
+  onClose,
+  pendingEdit,
+  onApprove,
+  onReject,
+}: FileViewerProps) {
+  if (file && pendingEdit && pendingEdit.path === file.path && onApprove && onReject) {
+    return <DiffView edit={pendingEdit} onApprove={onApprove} onReject={onReject} onClose={onClose} />;
+  }
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {file ? (

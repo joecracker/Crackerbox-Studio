@@ -35,15 +35,6 @@ export function useFileTree(files: DemoFile[]) {
       return next;
     });
 
-  const selectFile = (path: string) => {
-    if (activePath === path) {
-      setActivePath(null);
-      return;
-    }
-    expandTo(path);
-    setActivePath(path);
-  };
-
   const openFile = (path: string) => {
     expandTo(path);
     setActivePath(path);
@@ -70,7 +61,6 @@ export function useFileTree(files: DemoFile[]) {
   return {
     activePath,
     activeFile: activePath ? findNode(files, activePath) : undefined,
-    selectFile,
     openFile,
     deselectFile,
     expanded,

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import AppHeader from "./components/layout/AppHeader";
 import PanelResizer from "./components/layout/PanelResizer";
@@ -28,7 +28,17 @@ import { useTransientFlag } from "./hooks/useTransientFlag";
 import { useZenMode } from "./hooks/useZenMode";
 import { useFileTree } from "./hooks/useFileTree";
 import { useShortcuts } from "./hooks/useShortcuts";
+import { useEdits } from "./hooks/useEdits";
 import { demoFiles, flattenFiles } from "./data/demoFiles";
+import type { DemoFile } from "./data/demoFiles";
+
+function updateFileContent(nodes: DemoFile[], path: string, content: string): DemoFile[] {
+  return nodes.map((node) => {
+    if (node.path === path) return node.type === "file" ? { ...node, content } : node;
+    if (node.children) return { ...node, children: updateFileContent(node.children, path, content) };
+    return node;
+  });
+}
 
 export default function App() {
   const {
@@ -64,7 +74,9 @@ export default function App() {
   } | null>(null);
   const paletteOpenRef = useRef(paletteOpen);
   paletteOpenRef.current = paletteOpen;
-  const fileTree = useFileTree(demoFiles);
+  const [files, setFiles] = useState(demoFiles);
+  const fileTree = useFileTree(files);
+  const edits = useEdits();
   const parameters = useParameters();
   const modelSource = useModels();
   const deselectFileRef = useRef<() => void>(() => {});
@@ -73,6 +85,7 @@ export default function App() {
   const dialogOpen = parametersOpen || paletteOpen || shortcutsOpen || contextMenu !== null;
   const dialogOpenRef = useRef(dialogOpen);
   dialogOpenRef.current = dialogOpen;
+  const previewAutoHiddenRef = useRef(false);
 
   const handleToggleSidebar = () => {
     sidebarFlash();
@@ -103,6 +116,29 @@ export default function App() {
   const handleFileContextMenu = (path: string, x: number, y: number) => {
     fileTree.openFile(path);
     setContextMenu({ x, y, targetPath: path });
+  };
+
+  const proposeDemoEdit = (path: string) => {
+    const file = flattenFiles(files).find((f) => f.path === path);
+    if (!file || file.content == null) return;
+    edits.proposeEdit(path, `${file.content}// pending AI edit (demo — review below)\n`, file.content);
+  };
+
+  const approveEdit = (id: string) => {
+    const edit = edits.pending.find((e) => e.id === id);
+    if (!edit) return;
+    setFiles((prev) => updateFileContent(prev, edit.path, edit.newContent));
+    edits.rejectEdit(id);
+  };
+
+  const pendingPaths = useMemo(() => new Set(edits.pending.map((e) => e.path)), [edits.pending]);
+  const activeFile = fileTree.activeFile;
+  const activePendingEdit = activeFile
+    ? edits.pending.find((e) => e.path === activeFile.path)
+    : undefined;
+
+  const handleFileSelect = (path: string) => {
+    fileTree.openFile(path);
   };
 
   const coreCommands: PaletteCommand[] = [
@@ -141,12 +177,12 @@ export default function App() {
       label: "Keyboard shortcuts",
       run: () => setShortcutsOpen(true),
     },
-    ...flattenFiles(demoFiles).map(
+    ...flattenFiles(files).map(
       (f): PaletteCommand => ({
         id: `open:${f.path}`,
         label: `Open file: ${f.name}`,
         keywords: f.path,
-        run: () => fileTree.selectFile(f.path),
+        run: () => handleFileSelect(f.path),
       }),
     ),
   ];
@@ -167,6 +203,20 @@ export default function App() {
           void navigator.clipboard.writeText(path);
         },
       });
+      const existingEdit = edits.pending.find((e) => e.path === path);
+      if (existingEdit) {
+        contextMenuItems.push({
+          id: "dismiss-pending-edit",
+          label: "Dismiss pending edit",
+          run: () => edits.rejectEdit(existingEdit.id),
+        });
+      } else {
+        contextMenuItems.push({
+          id: "propose-demo-edit",
+          label: "Propose demo edit",
+          run: () => proposeDemoEdit(path),
+        });
+      }
       if (fileTree.activePath === path) {
         contextMenuItems.push({
           id: "close-file",
@@ -273,6 +323,18 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [zen, dialogOpen]);
 
+  useEffect(() => {
+    if (activePendingEdit) {
+      if (!previewCollapsed && !previewAutoHiddenRef.current) {
+        previewAutoHiddenRef.current = true;
+        togglePreview();
+      }
+    } else if (previewAutoHiddenRef.current) {
+      previewAutoHiddenRef.current = false;
+      if (previewCollapsed) togglePreview();
+    }
+  }, [activePendingEdit, previewCollapsed, togglePreview]);
+
   if (zen) return <ZenView onExit={exitZen} />;
 
   return (
@@ -303,10 +365,11 @@ export default function App() {
             expanded={fileTree.expanded}
             query={fileTree.query}
             nodes={fileTree.filtered}
-            onSelect={fileTree.selectFile}
+            onSelect={handleFileSelect}
             onToggle={fileTree.toggleExpanded}
             onQueryChange={fileTree.setQuery}
             onContextMenuFile={handleFileContextMenu}
+            pendingPaths={pendingPaths}
           />
           {!fileTreeCollapsed && (
             <PanelResizer
@@ -327,7 +390,13 @@ export default function App() {
             />
           )}
           <main className="flex min-w-0 flex-1 flex-col">
-            <FileViewer file={fileTree.activeFile} onClose={fileTree.deselectFile} />
+            <FileViewer
+              file={fileTree.activeFile}
+              onClose={fileTree.deselectFile}
+              pendingEdit={activePendingEdit}
+              onApprove={activePendingEdit ? () => approveEdit(activePendingEdit.id) : undefined}
+              onReject={activePendingEdit ? () => edits.rejectEdit(activePendingEdit.id) : undefined}
+            />
             <footer className="flex h-10 shrink-0 items-center justify-between border-t border-zinc-800 px-4 text-xs text-zinc-500">
               <span>Cracker Box — your AI dev workspace</span>
               <TokenCounter />

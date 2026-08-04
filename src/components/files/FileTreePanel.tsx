@@ -13,6 +13,7 @@ interface FileTreePanelProps {
   onToggle: (path: string) => void;
   onQueryChange: (query: string) => void;
   onContextMenuFile?: (path: string, x: number, y: number) => void;
+  pendingPaths?: Set<string>;
 }
 
 export default function FileTreePanel({
@@ -27,6 +28,7 @@ export default function FileTreePanel({
   onToggle,
   onQueryChange,
   onContextMenuFile,
+  pendingPaths,
 }: FileTreePanelProps) {
   return (
     <aside
@@ -70,6 +72,7 @@ export default function FileTreePanel({
           onToggle={onToggle}
           onSelect={onSelect}
           onContextMenuFile={onContextMenuFile}
+          pendingPaths={pendingPaths}
         />
         <div className="mt-auto shrink-0 truncate border-t border-zinc-800 px-3 py-2 text-[11px] text-zinc-500">
           {activePath ? activePath : "No file selected"}

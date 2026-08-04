@@ -11,6 +11,7 @@ interface FileTreeNodeProps {
   onToggle: () => void;
   onSelect: () => void;
   onContextMenu?: (path: string, x: number, y: number) => void;
+  pending?: boolean;
 }
 
 function CaretIcon({ open }: { open: boolean }) {
@@ -53,6 +54,7 @@ export function FileTreeNode({
   onToggle,
   onSelect,
   onContextMenu,
+  pending,
 }: FileTreeNodeProps) {
   const isFolder = node.type === "folder";
   return (
@@ -82,6 +84,16 @@ export function FileTreeNode({
         {isFolder ? <CaretIcon open={expanded} /> : <FileIcon />}
       </span>
       <span className="truncate">{node.name}</span>
+      {pending && (
+        <>
+          <span
+            className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400"
+            title="Pending changes"
+            aria-hidden="true"
+          />
+          <span className="sr-only">(pending changes)</span>
+        </>
+      )}
       {active && <span className="sr-only">(active)</span>}
     </div>
   );
