@@ -20,8 +20,8 @@ Status: done | in progress | planned
 6. **Diff-aware edits** — done (`34a8c42`)
    Proposed code changes surface as a line-by-line before/after diff and must be explicitly approved or rejected before being applied to the file tree.
 
-7. **Project library** — planned
-   Save, manage, and switch between multiple projects.
+7. **Project library** — done (`a65bfa6`)
+   Save, manage, and switch between multiple projects, each with its own file tree.
 
 8. **Deploy Wizard** — planned
    Guided push to GitHub and Netlify deployment.
