@@ -30,6 +30,7 @@ export default function AppHeader({
       <button
         type="button"
         onClick={onToggleFileTree}
+        title="Toggle file tree (Ctrl+Shift+E)"
         aria-label={fileTreeCollapsed ? "Show file tree" : "Hide file tree"}
         aria-expanded={!fileTreeCollapsed}
         aria-controls="app-filetree"
@@ -47,6 +48,7 @@ export default function AppHeader({
       <button
         type="button"
         onClick={onToggleSidebar}
+        title="Toggle sidebar (Ctrl+B)"
         aria-label={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
         aria-expanded={!sidebarCollapsed}
         aria-controls="app-sidebar"
@@ -60,6 +62,7 @@ export default function AppHeader({
         ref={parametersToggleRef}
         type="button"
         onClick={onOpenParameters}
+        title="Parameters (Ctrl+Shift+,)"
         aria-label="Parameters"
         aria-haspopup="dialog"
         aria-expanded={parametersOpen}
@@ -82,6 +85,7 @@ export default function AppHeader({
         ref={zenToggleRef}
         type="button"
         onClick={onToggleZen}
+        title="Toggle zen mode (Ctrl+Alt+Z)"
         aria-pressed={zenActive}
         aria-label={zenActive ? "Exit zen mode" : "Enter zen mode"}
         className="ml-auto flex h-8 w-8 items-center justify-center rounded-md text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"

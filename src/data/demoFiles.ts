@@ -6,6 +6,13 @@ export interface DemoFile {
   content?: string;
 }
 
+export function flattenFiles(nodes: DemoFile[]): DemoFile[] {
+  return nodes.flatMap((node) => {
+    const children = node.children ? flattenFiles(node.children) : [];
+    return node.type === "file" ? [node, ...children] : children;
+  });
+}
+
 export const demoFiles: DemoFile[] = [
   {
     name: "index.html",

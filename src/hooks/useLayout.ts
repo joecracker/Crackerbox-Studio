@@ -19,6 +19,7 @@ export interface LayoutState {
   sidebarWidth: number;
   sidebarCollapsed: boolean;
   previewWidth: number;
+  previewCollapsed: boolean;
   fileTreeWidth: number;
   fileTreeCollapsed: boolean;
 }
@@ -27,6 +28,7 @@ const DEFAULT_LAYOUT: LayoutState = {
   sidebarWidth: 320,
   sidebarCollapsed: false,
   previewWidth: Math.round(window.innerWidth * PREVIEW_DEFAULT_RATIO),
+  previewCollapsed: false,
   fileTreeWidth: 240,
   fileTreeCollapsed: false,
 };
@@ -56,6 +58,9 @@ export function useLayout() {
   const toggleFileTree = () =>
     setLayout((prev) => ({ ...prev, fileTreeCollapsed: !prev.fileTreeCollapsed }));
 
+  const togglePreview = () =>
+    setLayout((prev) => ({ ...prev, previewCollapsed: !prev.previewCollapsed }));
+
   return {
     sidebarWidth: layout.sidebarWidth,
     sidebarCollapsed: layout.sidebarCollapsed,
@@ -69,5 +74,7 @@ export function useLayout() {
     fileTreeCollapsed: layout.fileTreeCollapsed,
     setFileTreeWidth,
     toggleFileTree,
+    previewCollapsed: layout.previewCollapsed,
+    togglePreview,
   };
 }
