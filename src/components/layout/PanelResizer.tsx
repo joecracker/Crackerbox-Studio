@@ -6,9 +6,18 @@ interface PanelResizerProps {
   minWidth: number;
   maxWidth: number;
   onResize: (width: number) => void;
+  invert?: boolean;
+  label?: string;
 }
 
-export default function PanelResizer({ width, minWidth, maxWidth, onResize }: PanelResizerProps) {
+export default function PanelResizer({
+  width,
+  minWidth,
+  maxWidth,
+  onResize,
+  invert = false,
+  label = "Resize sidebar",
+}: PanelResizerProps) {
   const dragState = useRef<{ startX: number; startWidth: number } | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
 
@@ -31,7 +40,10 @@ export default function PanelResizer({ width, minWidth, maxWidth, onResize }: Pa
 
     const onMove = (ev: PointerEvent) => {
       if (!dragState.current) return;
-      const next = dragState.current.startWidth + (ev.clientX - dragState.current.startX);
+      const delta = ev.clientX - dragState.current.startX;
+      const next = invert
+        ? dragState.current.startWidth - delta
+        : dragState.current.startWidth + delta;
       const effectiveMax = Math.min(maxWidth, window.innerWidth - 260);
       onResize(Math.min(effectiveMax, Math.max(minWidth, next)));
     };
@@ -52,7 +64,9 @@ export default function PanelResizer({ width, minWidth, maxWidth, onResize }: Pa
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    const delta = e.key === "ArrowLeft" ? -12 : e.key === "ArrowRight" ? 12 : 0;
+    const dir = invert ? -1 : 1;
+    const delta =
+      e.key === "ArrowLeft" ? -12 * dir : e.key === "ArrowRight" ? 12 * dir : 0;
     if (delta === 0) return;
     e.preventDefault();
     onResize(Math.min(maxWidth, Math.max(minWidth, width + delta)));
@@ -62,7 +76,7 @@ export default function PanelResizer({ width, minWidth, maxWidth, onResize }: Pa
     <div
       role="separator"
       aria-orientation="vertical"
-      aria-label="Resize sidebar"
+      aria-label={label}
       aria-valuemin={minWidth}
       aria-valuemax={maxWidth}
       aria-valuenow={width}

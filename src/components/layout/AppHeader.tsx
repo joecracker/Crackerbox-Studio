@@ -1,9 +1,20 @@
+import type { Ref } from "react";
+
 interface AppHeaderProps {
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
+  zenActive: boolean;
+  onToggleZen: () => void;
+  zenToggleRef?: Ref<HTMLButtonElement>;
 }
 
-export default function AppHeader({ sidebarCollapsed, onToggleSidebar }: AppHeaderProps) {
+export default function AppHeader({
+  sidebarCollapsed,
+  onToggleSidebar,
+  zenActive,
+  onToggleZen,
+  zenToggleRef,
+}: AppHeaderProps) {
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b border-zinc-800 bg-zinc-950 px-3">
       <button
@@ -19,6 +30,23 @@ export default function AppHeader({ sidebarCollapsed, onToggleSidebar }: AppHead
         </svg>
       </button>
       <span className="text-sm font-semibold tracking-tight text-zinc-100">Cracker Box</span>
+      <button
+        ref={zenToggleRef}
+        type="button"
+        onClick={onToggleZen}
+        aria-pressed={zenActive}
+        aria-label={zenActive ? "Exit zen mode" : "Enter zen mode"}
+        className="ml-auto flex h-8 w-8 items-center justify-center rounded-md text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path
+            d="M6 2H3.5A1.5 1.5 0 0 0 2 3.5V6M10 2h2.5A1.5 1.5 0 0 1 14 3.5V6M6 14H3.5A1.5 1.5 0 0 1 2 12.5V10M10 14h2.5a1.5 1.5 0 0 0 1.5-1.5V10"
+            stroke="currentColor"
+            strokeWidth="1.3"
+            strokeLinecap="round"
+          />
+        </svg>
+      </button>
     </header>
   );
 }

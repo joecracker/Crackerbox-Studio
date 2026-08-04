@@ -1,21 +1,47 @@
+import { useEffect, useRef } from "react";
 import AppHeader from "./components/layout/AppHeader";
 import PanelResizer from "./components/layout/PanelResizer";
 import Sidebar from "./components/layout/Sidebar";
-import { SIDEBAR_MAX, SIDEBAR_MIN, useLayout } from "./hooks/useLayout";
-import { useTransientFlag } from "./hooks/useTransientFlag";
+import LivePreviewPanel from "./components/preview/LivePreviewPanel";
+import ZenView from "./components/zen/ZenView";
+import { SIDEBAR_MAX, SIDEBAR_MIN, useLayout } from "./hooks/useLayout";import { useTransientFlag } from "./hooks/useTransientFlag";
+import { useZenMode } from "./hooks/useZenMode";
 
 export default function App() {
-  const { sidebarWidth, sidebarCollapsed, setSidebarWidth, toggleSidebar } = useLayout();
+  const {
+    sidebarWidth,
+    sidebarCollapsed,
+    setSidebarWidth,
+    toggleSidebar,
+    previewWidth,
+    setPreviewWidth,
+    previewMinWidth,
+    previewMaxWidth,
+  } = useLayout();
   const [animating, flash] = useTransientFlag(220);
+  const { zen, toggleZen, exitZen } = useZenMode();
+  const zenToggleRef = useRef<HTMLButtonElement>(null);
 
   const handleToggleSidebar = () => {
     flash();
     toggleSidebar();
   };
 
+  useEffect(() => {
+    if (!zen) zenToggleRef.current?.focus();
+  }, [zen]);
+
+  if (zen) return <ZenView onExit={exitZen} />;
+
   return (
     <div className="flex h-screen flex-col bg-zinc-950 text-zinc-100">
-      <AppHeader sidebarCollapsed={sidebarCollapsed} onToggleSidebar={handleToggleSidebar} />
+      <AppHeader
+        sidebarCollapsed={sidebarCollapsed}
+        onToggleSidebar={handleToggleSidebar}
+        zenActive={zen}
+        onToggleZen={toggleZen}
+        zenToggleRef={zenToggleRef}
+      />
       <div className="flex min-h-0 flex-1">
         <Sidebar width={sidebarWidth} collapsed={sidebarCollapsed} transitioning={animating} />
         {!sidebarCollapsed && (
@@ -31,7 +57,7 @@ export default function App() {
             <div className="max-w-sm text-center">
               <h1 className="text-lg font-semibold text-zinc-100">Cracker Box</h1>
               <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-                Layout shell is in place. Chat, preview, and controls land next.
+                Chat panel lands next. Live preview is on the right.
               </p>
             </div>
           </div>
@@ -39,6 +65,12 @@ export default function App() {
             Cracker Box — your AI dev workspace
           </footer>
         </main>
+        <LivePreviewPanel
+          width={previewWidth}
+          minWidth={previewMinWidth()}
+          maxWidth={previewMaxWidth()}
+          onResize={setPreviewWidth}
+        />
       </div>
     </div>
   );
