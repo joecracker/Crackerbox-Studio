@@ -10,6 +10,7 @@ import ProjectLibrary from "./components/projects/ProjectLibrary";
 import ProjectNameDialog from "./components/projects/ProjectNameDialog";
 import DeployWizard from "./components/deploy/DeployWizard";
 import PersonalitySettings from "./components/settings/PersonalitySettings";
+import ChatView from "./components/chat/ChatView";
 import ParametersDialog from "./components/parameters/ParametersDialog";
 import TokenCounter from "./components/parameters/TokenCounter";
 import ZenView from "./components/zen/ZenView";
@@ -36,6 +37,7 @@ import { useEdits } from "./hooks/useEdits";
 import { useProjects } from "./hooks/useProjects";
 import { useTokenVault } from "./hooks/useTokenVault";
 import { usePersonality } from "./hooks/usePersonality";
+import { useChatHistory } from "./hooks/useChatHistory";
 import { flattenFiles } from "./data/demoFiles";
 import type { DemoFile } from "./data/demoFiles";
 
@@ -88,6 +90,7 @@ export default function App() {
   const projects = useProjects();
   const vault = useTokenVault();
   const personality = usePersonality();
+  const chat = useChatHistory(projects.activeProjectId);
   const activeFiles = projects.activeProject.files;
   const fileTree = useFileTree(activeFiles);
   const edits = useEdits();
@@ -122,6 +125,9 @@ export default function App() {
       e.target instanceof HTMLTextAreaElement ||
       e.target instanceof HTMLSelectElement
     ) {
+      return;
+    }
+    if (e.target instanceof Element && e.target.closest("[data-native-context-menu]")) {
       return;
     }
     e.preventDefault();
@@ -462,13 +468,23 @@ export default function App() {
             />
           )}
           <main className="flex min-w-0 flex-1 flex-col">
-            <FileViewer
-              file={fileTree.activeFile}
-              onClose={fileTree.deselectFile}
-              pendingEdit={activePendingEdit}
-              onApprove={activePendingEdit ? () => approveEdit(activePendingEdit.id) : undefined}
-              onReject={activePendingEdit ? () => edits.rejectEdit(activePendingEdit.id) : undefined}
-            />
+            {fileTree.activeFile ? (
+              <FileViewer
+                file={fileTree.activeFile}
+                onClose={fileTree.deselectFile}
+                pendingEdit={activePendingEdit}
+                onApprove={activePendingEdit ? () => approveEdit(activePendingEdit.id) : undefined}
+                onReject={activePendingEdit ? () => edits.rejectEdit(activePendingEdit.id) : undefined}
+              />
+            ) : (
+              <ChatView
+                key={projects.activeProjectId}
+                projectName={projects.activeProject.name}
+                messages={chat.messages}
+                onSend={chat.send}
+                onOpenParameters={() => setParametersOpen(true)}
+              />
+            )}
             <footer className="flex h-10 shrink-0 items-center justify-between border-t border-zinc-800 px-4 text-xs text-zinc-500">
               <span>Cracker Box — your AI dev workspace</span>
               <TokenCounter />
