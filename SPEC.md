@@ -26,5 +26,5 @@ Status: done | in progress | planned
 8. **Deploy Wizard** — done (`e4c35f3`)
    Guided push to GitHub and Netlify deployment, with API tokens encrypted at rest (PBKDF2 + AES-GCM).
 
-9. **Personality / communication controls** — planned
-   Adjust how the assistant communicates (tone, style, verbosity).
+9. **Personality / communication controls** — done (`699cfcd`)
+   Tone, verbosity, and custom-instruction presets that compose into the system prompt, persisted per workspace.
