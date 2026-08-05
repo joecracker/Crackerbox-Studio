@@ -9,6 +9,7 @@ import LivePreviewPanel from "./components/preview/LivePreviewPanel";
 import ProjectLibrary from "./components/projects/ProjectLibrary";
 import ProjectNameDialog from "./components/projects/ProjectNameDialog";
 import DeployWizard from "./components/deploy/DeployWizard";
+import PersonalitySettings from "./components/settings/PersonalitySettings";
 import ParametersDialog from "./components/parameters/ParametersDialog";
 import TokenCounter from "./components/parameters/TokenCounter";
 import ZenView from "./components/zen/ZenView";
@@ -34,6 +35,7 @@ import { useShortcuts } from "./hooks/useShortcuts";
 import { useEdits } from "./hooks/useEdits";
 import { useProjects } from "./hooks/useProjects";
 import { useTokenVault } from "./hooks/useTokenVault";
+import { usePersonality } from "./hooks/usePersonality";
 import { flattenFiles } from "./data/demoFiles";
 import type { DemoFile } from "./data/demoFiles";
 
@@ -85,6 +87,7 @@ export default function App() {
   >(null);
   const projects = useProjects();
   const vault = useTokenVault();
+  const personality = usePersonality();
   const activeFiles = projects.activeProject.files;
   const fileTree = useFileTree(activeFiles);
   const edits = useEdits();
@@ -441,6 +444,12 @@ export default function App() {
                 projectName={projects.activeProject.name}
                 files={projects.activeProject.files}
                 vault={vault}
+              />
+            )}
+            {sidebarTab === "settings" && (
+              <PersonalitySettings
+                personality={personality}
+                baseSystemPrompt={parameters.systemPrompt}
               />
             )}
           </Sidebar>
