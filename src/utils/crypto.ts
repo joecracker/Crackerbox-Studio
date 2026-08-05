@@ -1,0 +1,89 @@
+export interface EncryptedPayload {
+  salt: string;
+  iv: string;
+  iterations: number;
+  ciphertext: string;
+}
+
+const DEFAULT_ITERATIONS = 150_000;
+
+function requireSubtle(): SubtleCrypto {
+  if (!crypto?.subtle) {
+    throw new Error("Web Crypto unavailable — open this app over HTTPS.");
+  }
+  return crypto.subtle;
+}
+
+function toBase64(bytes: Uint8Array<ArrayBuffer>): string {
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary);
+}
+
+function fromBase64(base64: string): Uint8Array<ArrayBuffer> {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+async function deriveKey(
+  passphrase: string,
+  salt: Uint8Array<ArrayBuffer>,
+  iterations: number
+): Promise<CryptoKey> {
+  const subtle = requireSubtle();
+  const material = await subtle.importKey(
+    "raw",
+    new TextEncoder().encode(passphrase),
+    "PBKDF2",
+    false,
+    ["deriveKey"]
+  );
+  return subtle.deriveKey(
+    { name: "PBKDF2", hash: "SHA-256", salt, iterations },
+    material,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+export async function encryptToken(
+  passphrase: string,
+  plaintext: string
+): Promise<EncryptedPayload> {
+  const subtle = requireSubtle();
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveKey(passphrase, salt, DEFAULT_ITERATIONS);
+  const ciphertext = await subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    new TextEncoder().encode(plaintext)
+  );
+  return {
+    salt: toBase64(salt),
+    iv: toBase64(iv),
+    iterations: DEFAULT_ITERATIONS,
+    ciphertext: toBase64(new Uint8Array(ciphertext)),
+  };
+}
+
+export async function decryptToken(
+  passphrase: string,
+  payload: EncryptedPayload
+): Promise<string> {
+  const subtle = requireSubtle();
+  const key = await deriveKey(passphrase, fromBase64(payload.salt), payload.iterations);
+  try {
+    const plaintext = await subtle.decrypt(
+      { name: "AES-GCM", iv: fromBase64(payload.iv) },
+      key,
+      fromBase64(payload.ciphertext)
+    );
+    return new TextDecoder().decode(plaintext);
+  } catch {
+    throw new Error("Incorrect passphrase");
+  }
+}
