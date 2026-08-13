@@ -3,9 +3,11 @@ import PreviewCanvas from "../preview/PreviewCanvas";
 
 interface ZenViewProps {
   onExit: () => void;
+  srcDoc?: string | null;
+  busy?: boolean;
 }
 
-export default function ZenView({ onExit }: ZenViewProps) {
+export default function ZenView({ onExit, srcDoc = null, busy = false }: ZenViewProps) {
   const exitRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -31,7 +33,7 @@ export default function ZenView({ onExit }: ZenViewProps) {
         Exit zen
       </button>
       <div className="flex flex-1 flex-col overflow-auto">
-        <PreviewCanvas />
+        <PreviewCanvas srcDoc={srcDoc} busy={busy} />
       </div>
     </div>
   );

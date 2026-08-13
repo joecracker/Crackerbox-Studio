@@ -29,5 +29,8 @@ Status: done | in progress | planned
 9. **Personality / communication controls** — done (`699cfcd`)
    Tone, verbosity, and custom-instruction presets that compose into the system prompt, persisted per workspace.
 
-10. **Chat completions with OpenRouter streaming** — in progress
+10. **Chat completions with OpenRouter streaming** — done (`8c42009`)
     Chat wired to OpenRouter's `/api/v1/chat/completions` with SSE streaming (`useChatStream`), the Feature 4 model picker feeds the request model, the encrypted Feature 8 vault stores the OpenRouter API key, and errors (bad key, rate limits, unavailable model) surface in the chat UI. Client-side only.
+
+11. **Live preview rendering + auto-hiding toolbar** — in progress
+    The preview pane runs AI-generated HTML/CSS/JS from the last assistant reply in a sandboxed iframe (`allow-scripts`, opaque origin), refreshed on generation completion. The pane toolbar auto-hides to a hover strip, with pin and auto-hide toggles persisted per workspace.

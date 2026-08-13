@@ -42,6 +42,7 @@ import type { ChatAttachment } from "./hooks/useChatHistory";
 import { useChatStream } from "./hooks/useChatStream";
 import { flattenFiles } from "./data/demoFiles";
 import type { DemoFile } from "./data/demoFiles";
+import { extractPreview } from "./utils/preview";
 
 function updateFileContent(nodes: DemoFile[], path: string, content: string): DemoFile[] {
   return nodes.map((node) => {
@@ -130,6 +131,24 @@ export default function App() {
     chat.send(text, attachments);
     void chatStream.stream(text, attachments);
   };
+
+  const lastAssistantText = useMemo(() => {
+    for (let i = chat.messages.length - 1; i >= 0; i--) {
+      if (chat.messages[i].role === "assistant") return chat.messages[i].text;
+    }
+    return null;
+  }, [chat.messages]);
+
+  const lastAssistantTextRef = useRef<string | null>(null);
+  lastAssistantTextRef.current = lastAssistantText;
+
+  const [previewDoc, setPreviewDoc] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (chatStream.busy) return;
+    const src = lastAssistantTextRef.current;
+    setPreviewDoc(src ? extractPreview(src) : null);
+  }, [chatStream.busy, projects.activeProjectId]);
   const deselectFileRef = useRef<() => void>(() => {});
   deselectFileRef.current = fileTree.deselectFile;
 
@@ -417,7 +436,7 @@ export default function App() {
     }
   }, [projects.activeProjectId, edits, fileTree, fileTreeCollapsed, handleToggleFileTree]);
 
-  if (zen) return <ZenView onExit={exitZen} />;
+  if (zen) return <ZenView onExit={exitZen} srcDoc={previewDoc} busy={chatStream.busy} />;
 
   return (
     <>
@@ -536,6 +555,8 @@ export default function App() {
               minWidth={previewMinWidth()}
               maxWidth={previewMaxWidth()}
               onResize={setPreviewWidth}
+              srcDoc={previewDoc}
+              busy={chatStream.busy}
             />
           )}
         </div>
