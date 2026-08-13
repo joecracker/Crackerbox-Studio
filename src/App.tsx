@@ -38,6 +38,8 @@ import { useProjects } from "./hooks/useProjects";
 import { useTokenVault } from "./hooks/useTokenVault";
 import { usePersonality } from "./hooks/usePersonality";
 import { useChatHistory } from "./hooks/useChatHistory";
+import type { ChatAttachment } from "./hooks/useChatHistory";
+import { useChatStream } from "./hooks/useChatStream";
 import { flattenFiles } from "./data/demoFiles";
 import type { DemoFile } from "./data/demoFiles";
 
@@ -95,7 +97,32 @@ export default function App() {
   const fileTree = useFileTree(activeFiles);
   const edits = useEdits();
   const parameters = useParameters();
+  const chatStream = useChatStream({
+    activeProjectId: projects.activeProjectId,
+    messages: chat.messages,
+    model: parameters.selectedModelId,
+    systemPrompt: personality.composePrompt(parameters.systemPrompt),
+    temperature: parameters.temperature,
+    maxTokens: parameters.maxTokens,
+    getApiKey: () => (vault.unlocked ? vault.tokens.openrouter ?? null : null),
+    appendAssistant: chat.appendAssistant,
+    patchAssistant: chat.patchAssistant,
+    removeAssistant: chat.removeAssistant,
+  });
   const modelSource = useModels();
+
+  const sendBlockedReason = !parameters.selectedModelId
+    ? "No model selected — open Parameters (Ctrl+Shift+,) to pick one."
+    : !vault.unlocked
+      ? "Unlock the vault — open Deploy in the sidebar and enter your passphrase."
+      : !vault.tokens.openrouter
+        ? "No OpenRouter API key saved — add one under Deploy → Connect accounts."
+        : null;
+
+  const handleChatSend = (text: string, attachments: ChatAttachment[]) => {
+    chat.send(text, attachments);
+    void chatStream.stream(text, attachments);
+  };
   const deselectFileRef = useRef<() => void>(() => {});
   deselectFileRef.current = fileTree.deselectFile;
 
@@ -481,8 +508,13 @@ export default function App() {
                 key={projects.activeProjectId}
                 projectName={projects.activeProject.name}
                 messages={chat.messages}
-                onSend={chat.send}
+                onSend={handleChatSend}
                 onOpenParameters={() => setParametersOpen(true)}
+                streaming={chatStream.busy}
+                sendDisabled={sendBlockedReason !== null}
+                sendDisabledReason={sendBlockedReason}
+                streamError={chatStream.error}
+                onDismissStreamError={chatStream.dismissError}
               />
             )}
             <footer className="flex h-10 shrink-0 items-center justify-between border-t border-zinc-800 px-4 text-xs text-zinc-500">

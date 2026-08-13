@@ -3,15 +3,16 @@ import { usePersistentState } from "./usePersistentState";
 import { decryptToken, encryptToken } from "../utils/crypto";
 import type { EncryptedPayload } from "../utils/crypto";
 
-export type TokenService = "github" | "netlify";
+export type TokenService = "github" | "netlify" | "openrouter";
 
 interface VaultState {
   github: EncryptedPayload | null;
   netlify: EncryptedPayload | null;
+  openrouter: EncryptedPayload | null;
 }
 
 const VAULT_KEY = "crackerbox.deploy.vault";
-const EMPTY_VAULT: VaultState = { github: null, netlify: null };
+const EMPTY_VAULT: VaultState = { github: null, netlify: null, openrouter: null };
 
 export interface TokenVault {
   unlocked: boolean;
@@ -41,6 +42,7 @@ export function useTokenVault(): TokenVault {
       const result: Partial<Record<TokenService, string>> = {};
       if (vault.github) result.github = await decryptToken(phrase, vault.github);
       if (vault.netlify) result.netlify = await decryptToken(phrase, vault.netlify);
+      if (vault.openrouter) result.openrouter = await decryptToken(phrase, vault.openrouter);
       setPassphrase(phrase);
       setTokens(result);
     } catch (e) {

@@ -31,6 +31,16 @@ export function useChatHistory(activeProjectId: string) {
 
   const messages = byProject[activeProjectId] ?? [];
 
+  const updateProject = useCallback(
+    (updater: (list: ChatMessage[]) => ChatMessage[]) => {
+      setByProject((prev) => ({
+        ...prev,
+        [activeProjectId]: updater(prev[activeProjectId] ?? []),
+      }));
+    },
+    [activeProjectId, setByProject]
+  );
+
   const send = useCallback(
     (text: string, attachments: ChatAttachment[]) => {
       const message: ChatMessage = {
@@ -40,13 +50,37 @@ export function useChatHistory(activeProjectId: string) {
         attachments,
         createdAt: Date.now(),
       };
-      setByProject((prev) => ({
-        ...prev,
-        [activeProjectId]: [...(prev[activeProjectId] ?? []), message],
-      }));
+      updateProject((list) => [...list, message]);
     },
-    [activeProjectId, setByProject]
+    [updateProject]
   );
 
-  return { messages, send };
+  const appendAssistant = useCallback((): string => {
+    const id = createId();
+    updateProject((list) => [
+      ...list,
+      { id, role: "assistant", text: "", attachments: [], createdAt: Date.now() },
+    ]);
+    return id;
+  }, [updateProject]);
+
+  const patchAssistant = useCallback(
+    (id: string, updater: (text: string) => string) => {
+      updateProject((list) =>
+        list.map((m) =>
+          m.id === id && m.role === "assistant" ? { ...m, text: updater(m.text) } : m
+        )
+      );
+    },
+    [updateProject]
+  );
+
+  const removeAssistant = useCallback(
+    (id: string) => {
+      updateProject((list) => list.filter((m) => m.id !== id));
+    },
+    [updateProject]
+  );
+
+  return { messages, send, appendAssistant, patchAssistant, removeAssistant };
 }

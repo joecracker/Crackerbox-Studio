@@ -45,8 +45,9 @@ function AttachmentList({ attachments }: { attachments: ChatMessage["attachments
   );
 }
 
-function MessageBubble({ message }: { message: ChatMessage }) {
+function MessageBubble({ message, streaming }: { message: ChatMessage; streaming: boolean }) {
   const isUser = message.role === "user";
+  const pending = !isUser && streaming && !message.text;
   return (
     <div className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}>
       <div
@@ -57,8 +58,18 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         }`}
       >
         {message.attachments.length > 0 && <AttachmentList attachments={message.attachments} />}
-        {message.text && (
-          <p className="whitespace-pre-wrap break-words">{message.text}</p>
+        {pending ? (
+          <span className="flex items-center gap-1 py-0.5" aria-label="Assistant is thinking">
+            {[0, 1, 2].map((dot) => (
+              <span
+                key={dot}
+                className="h-1.5 w-1.5 animate-pulse rounded-full bg-zinc-500"
+                style={{ animationDelay: `${dot * 160}ms` }}
+              />
+            ))}
+          </span>
+        ) : (
+          message.text && <p className="whitespace-pre-wrap break-words">{message.text}</p>
         )}
       </div>
       <span className="mt-1 text-[10px] tabular-nums text-zinc-600">
@@ -70,15 +81,17 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 
 interface MessageListProps {
   messages: ChatMessage[];
+  streaming?: boolean;
 }
 
-export default function MessageList({ messages }: MessageListProps) {
+export default function MessageList({ messages, streaming = false }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const lastText = messages.length > 0 ? messages[messages.length - 1].text : "";
 
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length]);
+  }, [messages.length, lastText]);
 
   if (messages.length === 0) {
     return (
@@ -89,8 +102,8 @@ export default function MessageList({ messages }: MessageListProps) {
         <div className="max-w-sm text-center">
           <h1 className="text-lg font-semibold text-zinc-100">Cracker Box</h1>
           <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-            Start a conversation about your workspace. Ask questions, attach files, and get
-            AI-assisted help — replies are coming in a follow-up feature.
+            Start a conversation about your workspace. Ask questions and attach files — the model
+            streams its reply right in this chat.
           </p>
         </div>
       </div>
@@ -104,8 +117,12 @@ export default function MessageList({ messages }: MessageListProps) {
       className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
     >
       <div className="flex flex-col gap-4">
-        {messages.map((message) => (
-          <MessageBubble key={message.id} message={message} />
+        {messages.map((message, index) => (
+          <MessageBubble
+            key={message.id}
+            message={message}
+            streaming={streaming && index === messages.length - 1}
+          />
         ))}
       </div>
     </div>

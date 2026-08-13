@@ -125,7 +125,8 @@ export default function DeployWizard({ projectName, files, vault }: DeployWizard
   const [deployError, setDeployError] = useState<string | null>(null);
   const [result, setResult] = useState<DeployResult | null>(null);
 
-  const hasStoredAny = vault.hasStored("github") || vault.hasStored("netlify");
+  const hasStoredAny =
+    vault.hasStored("github") || vault.hasStored("netlify") || vault.hasStored("openrouter");
   const canContinue =
     vault.unlocked && !!vault.tokens.github && !!vault.tokens.netlify;
   const canDeploy = canContinue && files.length > 0;
@@ -195,6 +196,18 @@ export default function DeployWizard({ projectName, files, vault }: DeployWizard
                 onSave={(value) => void vault.saveToken("netlify", value)}
                 onRemove={() => vault.clearToken("netlify")}
               />
+              <TokenField
+                label="OpenRouter API key (chat)"
+                placeholder="sk-or-v1-…"
+                token={vault.tokens.openrouter ?? ""}
+                hasToken={!!vault.tokens.openrouter}
+                onSave={(value) => void vault.saveToken("openrouter", value)}
+                onRemove={() => vault.clearToken("openrouter")}
+              />
+              <p className="text-[11px] leading-relaxed text-zinc-600">
+                The OpenRouter key powers chat in this workspace. It is encrypted with the same
+                vault passphrase as your GitHub and Netlify tokens.
+              </p>
               <button
                 type="button"
                 onClick={vault.lock}

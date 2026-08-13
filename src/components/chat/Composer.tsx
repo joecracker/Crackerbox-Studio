@@ -9,6 +9,9 @@ const ACCEPT =
 interface ComposerProps {
   onSend: (text: string, attachments: ChatAttachment[]) => void;
   onOpenParameters: () => void;
+  disabled?: boolean;
+  disabledReason?: string | null;
+  busy?: boolean;
 }
 
 function formatSize(bytes: number): string {
@@ -17,7 +20,13 @@ function formatSize(bytes: number): string {
   return `${bytes} B`;
 }
 
-export default function Composer({ onSend, onOpenParameters }: ComposerProps) {
+export default function Composer({
+  onSend,
+  onOpenParameters,
+  disabled = false,
+  disabledReason = null,
+  busy = false,
+}: ComposerProps) {
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -52,6 +61,7 @@ export default function Composer({ onSend, onOpenParameters }: ComposerProps) {
 
   const handleSend = () => {
     if (!canSend) return;
+    if (disabled || busy) return;
     onSend(text.trim(), attachments);
     resetComposer();
   };
@@ -142,6 +152,27 @@ export default function Composer({ onSend, onOpenParameters }: ComposerProps) {
         </div>
       )}
       <div className="rounded-lg border border-zinc-800 bg-zinc-900 focus-within:border-sky-600 focus-within:ring-1 focus-within:ring-sky-600">
+        {disabled && disabledReason && (
+          <div className="flex items-start gap-1.5 border-b border-zinc-800 px-3 py-1.5 text-[11px] leading-relaxed text-amber-400/90">
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 16 16"
+              fill="none"
+              aria-hidden="true"
+              className="mt-0.5 shrink-0"
+            >
+              <path
+                d="M8 1.8 15 13.8H1L8 1.8Z"
+                stroke="currentColor"
+                strokeWidth="1.3"
+                strokeLinejoin="round"
+              />
+              <path d="M8 6v3M8 11.2v.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            </svg>
+            <span>{disabledReason}</span>
+          </div>
+        )}
         <textarea
           ref={textareaRef}
           value={text}
@@ -190,9 +221,9 @@ export default function Composer({ onSend, onOpenParameters }: ComposerProps) {
           <button
             type="button"
             onClick={handleSend}
-            disabled={!canSend}
+            disabled={!canSend || disabled || busy}
             aria-label="Send message"
-            title="Send (Enter)"
+            title={busy ? "Waiting for reply…" : "Send (Enter)"}
             className="flex h-7 w-7 items-center justify-center rounded-md bg-sky-500 text-zinc-950 transition-colors hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
