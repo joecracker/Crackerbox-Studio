@@ -111,6 +111,13 @@ export default function App() {
   });
   const modelSource = useModels();
 
+  const selectedModel = modelSource.models.find((m) => m.id === parameters.selectedModelId);
+  const modelLabel = parameters.selectedModelId
+    ? selectedModel
+      ? `${selectedModel.name} — ${selectedModel.provider}`
+      : parameters.selectedModelId
+    : null;
+
   const sendBlockedReason = !parameters.selectedModelId
     ? "No model selected — open Parameters (Ctrl+Shift+,) to pick one."
     : !vault.unlocked
@@ -510,6 +517,7 @@ export default function App() {
                 messages={chat.messages}
                 onSend={handleChatSend}
                 onOpenParameters={() => setParametersOpen(true)}
+                modelLabel={modelLabel}
                 streaming={chatStream.busy}
                 sendDisabled={sendBlockedReason !== null}
                 sendDisabledReason={sendBlockedReason}

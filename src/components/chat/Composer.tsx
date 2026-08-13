@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ChangeEvent, KeyboardEvent } from "react";
+import type { ChangeEvent, ClipboardEvent, KeyboardEvent } from "react";
 import type { ChatAttachment } from "../../hooks/useChatHistory";
 
 const MAX_EMBED_SIZE = 1_500_000;
@@ -73,9 +73,18 @@ export default function Composer({
     }
   };
 
-  const handlePickFiles = (e: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
-    if (files.length === 0) return;
+  const handlePaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = Array.from(e.clipboardData?.items ?? []);
+    const images = items.filter((item) => item.type.startsWith("image/"));
+    if (images.length === 0) return;
+    e.preventDefault();
+    const files = images
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => file !== null);
+    if (files.length > 0) addFiles(files);
+  };
+
+  const addFiles = (files: File[]) => {
     files.forEach((file) => {
       const attachment: ChatAttachment = {
         id: `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -96,6 +105,12 @@ export default function Composer({
         setAttachments((prev) => [...prev, attachment]);
       }
     });
+  };
+
+  const handlePickFiles = (e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    addFiles(files);
     e.target.value = "";
   };
 
@@ -178,6 +193,7 @@ export default function Composer({
           value={text}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           rows={1}
           placeholder="Ask anything…"
           className="block w-full resize-none bg-transparent px-3 pb-1 pt-3 text-sm leading-relaxed text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
