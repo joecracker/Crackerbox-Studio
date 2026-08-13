@@ -49,6 +49,8 @@ function toolArgsPath(args: string): string {
   try {
     const parsed = JSON.parse(args || "{}") as Record<string, unknown>;
     if (typeof parsed.path === "string") return parsed.path;
+    if (typeof parsed.command === "string") return parsed.command;
+    if (typeof parsed.spec === "string") return `npm install ${parsed.spec}`;
   } catch {
     // ignore malformed arguments
   }
@@ -63,6 +65,10 @@ function toolSummary(call: ChatToolCall): string {
   }
   if (call.name === "read_file") {
     return formatSize(new TextEncoder().encode(result).length);
+  }
+  if (call.name === "run_command" || call.name === "install_package") {
+    const firstLine = result.split("\n")[0] ?? "";
+    return firstLine.trim();
   }
   return "";
 }
@@ -89,6 +95,12 @@ function ToolActivity({ call }: { call: ChatToolCall }) {
             <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
         )}
+        {call.status === "blocked" && (
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true" className="text-red-400">
+            <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.3" />
+            <path d="M5 5l6 6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+          </svg>
+        )}
         {call.status === "approval" && (
           <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true" className="text-sky-400">
             <path d="M8 12h.5M6 5a2 2 0 1 1 3.5 1.3C8.7 7.1 8 7.6 8 9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
@@ -100,7 +112,7 @@ function ToolActivity({ call }: { call: ChatToolCall }) {
       </span>
       <code className="shrink-0 font-mono text-[11px] font-medium text-zinc-300">{call.name}</code>
       {path && (
-        <code className="shrink-0 rounded bg-zinc-800/80 px-1 py-px font-mono text-[10px] text-zinc-400">
+        <code className="max-w-56 truncate rounded bg-zinc-800/80 px-1 py-px font-mono text-[10px] text-zinc-400">
           {path}
         </code>
       )}
@@ -110,14 +122,20 @@ function ToolActivity({ call }: { call: ChatToolCall }) {
       {call.status !== "running" && call.status !== "approval" && (
         <span
           className={`min-w-0 truncate text-[11px] ${
-            call.status === "error" ? "text-red-400" : call.status === "rejected" ? "text-amber-400" : "text-zinc-500"
+            call.status === "error" || call.status === "blocked"
+              ? "text-red-400"
+              : call.status === "rejected"
+                ? "text-amber-400"
+                : "text-zinc-500"
           }`}
         >
           {call.status === "error"
             ? (call.result ?? "failed")
-            : call.status === "rejected"
-              ? (call.result ?? "rejected")
-              : summary}
+            : call.status === "blocked"
+              ? (call.result ?? "blocked")
+              : call.status === "rejected"
+                ? (call.result ?? "rejected")
+                : summary}
         </span>
       )}
     </div>

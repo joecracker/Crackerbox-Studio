@@ -13,7 +13,7 @@ export interface ChatToolCall {
   id: string;
   name: string;
   arguments: string;
-  status: "running" | "done" | "error" | "approval" | "rejected";
+  status: "running" | "done" | "error" | "approval" | "rejected" | "blocked";
   result?: string;
   oldContent?: string;
 }

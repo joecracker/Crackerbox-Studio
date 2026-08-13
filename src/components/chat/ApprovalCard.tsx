@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { PendingApproval } from "../../hooks/useChatStream";
 import { diffLines, diffStat } from "../../utils/diff";
+import { checkCommandDenylist } from "../../utils/commandGuard";
 
 const ROW_CLASSES: Record<string, string> = {
   eq: "text-zinc-400",
@@ -20,51 +21,93 @@ interface ApprovalCardProps {
   onReject: () => void;
 }
 
-export default function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProps) {
-  const isDelete = approval.name === "delete_file";
-  const lines = useMemo(
-    () => diffLines(approval.oldContent, approval.newContent),
-    [approval.oldContent, approval.newContent]
+const BADGE_STYLES: Record<PendingApproval["name"], string> = {
+  write_file: "bg-sky-500/15 text-sky-300",
+  delete_file: "bg-red-500/15 text-red-300",
+  run_command: "bg-amber-500/15 text-amber-300",
+  install_package: "bg-cyan-500/15 text-cyan-300",
+};
+
+const BADGE_LABELS: Record<PendingApproval["name"], string> = {
+  write_file: "Write",
+  delete_file: "Delete",
+  run_command: "Run",
+  install_package: "Install",
+};
+
+function ApprovalDiff({ added, removed }: { added: number; removed: number }) {
+  return (
+    <>
+      <span className="shrink-0 text-[11px] tabular-nums text-emerald-400">+{added}</span>
+      <span className="shrink-0 text-[11px] tabular-nums text-red-400">-{removed}</span>
+    </>
   );
-  const { added, removed } = useMemo(() => diffStat(lines), [lines]);
+}
+
+export default function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProps) {
+  const isDiff = approval.name === "write_file" || approval.name === "delete_file";
+  const lines = useMemo(
+    () => (isDiff ? diffLines(approval.oldContent, approval.newContent) : []),
+    [approval.oldContent, approval.newContent, isDiff]
+  );
+  const { added, removed } = useMemo(
+    () => (isDiff ? diffStat(lines) : { added: 0, removed: 0 }),
+    [lines, isDiff]
+  );
+  const denylist = useMemo(
+    () => (approval.command ? checkCommandDenylist(approval.command) : { blocked: false, reason: "" }),
+    [approval.command]
+  );
 
   return (
     <div className="mt-2 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950/80">
       <div className="flex items-center gap-2 border-b border-zinc-800 bg-zinc-900/60 px-3 py-2">
         <span
-          className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
-            isDelete ? "bg-red-500/15 text-red-300" : "bg-sky-500/15 text-sky-300"
-          }`}
+          className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${BADGE_STYLES[approval.name]}`}
         >
-          {isDelete ? "Delete" : "Write"}
+          {BADGE_LABELS[approval.name]}
         </span>
-        <code className="truncate font-mono text-[11px] text-zinc-200">{approval.path}</code>
-        <span className="shrink-0 text-[11px] tabular-nums text-emerald-400">+{added}</span>
-        <span className="shrink-0 text-[11px] tabular-nums text-red-400">-{removed}</span>
+        <code className="truncate font-mono text-[11px] text-zinc-200">{approval.path || approval.command}</code>
+        {isDiff && <ApprovalDiff added={added} removed={removed} />}
       </div>
       {approval.rationale.trim() && (
         <p className="border-b border-zinc-800/70 px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
           {approval.rationale}
         </p>
       )}
-      <div className="max-h-56 overflow-y-auto px-3 py-2">
-        <code className="block w-max min-w-full font-mono text-[11px] leading-relaxed">
-          {lines.map((line, i) => (
-            <span key={i} className={`flex ${ROW_CLASSES[line.type]}`}>
-              <span className={`w-4 shrink-0 select-none text-center ${MARKER_CLASSES[line.type]}`}>
-                {line.type === "add" ? "+" : line.type === "del" ? "-" : " "}
+      {isDiff ? (
+        <div className="max-h-56 overflow-y-auto px-3 py-2">
+          <code className="block w-max min-w-full font-mono text-[11px] leading-relaxed">
+            {lines.map((line, i) => (
+              <span key={i} className={`flex ${ROW_CLASSES[line.type]}`}>
+                <span className={`w-4 shrink-0 select-none text-center ${MARKER_CLASSES[line.type]}`}>
+                  {line.type === "add" ? "+" : line.type === "del" ? "-" : " "}
+                </span>
+                <span className="w-7 shrink-0 select-none pr-1 text-right text-zinc-600">
+                  {line.oldNo ?? ""}
+                </span>
+                <span className="w-7 shrink-0 select-none pr-1 text-right text-zinc-600">
+                  {line.newNo ?? ""}
+                </span>
+                <span className="whitespace-pre px-1">{line.text}</span>
               </span>
-              <span className="w-7 shrink-0 select-none pr-1 text-right text-zinc-600">
-                {line.oldNo ?? ""}
-              </span>
-              <span className="w-7 shrink-0 select-none pr-1 text-right text-zinc-600">
-                {line.newNo ?? ""}
-              </span>
-              <span className="whitespace-pre px-1">{line.text}</span>
-            </span>
-          ))}
-        </code>
-      </div>
+            ))}
+          </code>
+        </div>
+      ) : (
+        <div className="px-3 py-2">
+          <div className="rounded-md border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+            <code className="block whitespace-pre-wrap break-all font-mono text-[12px] leading-relaxed text-zinc-100">
+              {approval.command}
+            </code>
+          </div>
+          {denylist.blocked && (
+            <p className="mt-2 text-[11px] leading-relaxed text-red-400">
+              This command matches the safety denylist: {denylist.reason}. It will not be run.
+            </p>
+          )}
+        </div>
+      )}
       <div className="flex items-center justify-end gap-2 border-t border-zinc-800 bg-zinc-900/60 px-3 py-2">
         <button
           type="button"

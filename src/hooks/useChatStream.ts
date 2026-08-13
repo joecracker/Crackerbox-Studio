@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createWorkspaceFS, executeWorkspaceTool, getFile } from "../utils/workspace";
-import { writeWorkspaceFile, deleteWorkspaceFile } from "../utils/workspaceWebContainer";
+import {
+  writeWorkspaceFile,
+  deleteWorkspaceFile,
+  runCommandInContainer,
+  installPackageInContainer,
+} from "../utils/workspaceWebContainer";
+import { checkCommandDenylist } from "../utils/commandGuard";
 import type {
   ChatToolCall,
   ChatAttachment,
@@ -142,9 +148,63 @@ const WRITE_TOOLS: ToolDefinition[] = [
   },
 ];
 
+const COMMAND_TOOLS: ToolDefinition[] = [
+  {
+    type: "function",
+    function: {
+      name: "run_command",
+      description:
+        "Run a shell command in the project workspace (WebContainers). Requires the user's " +
+        "approval — the exact command is shown before it runs. Use only for safe, project-scoped " +
+        "commands.",
+      parameters: {
+        type: "object",
+        properties: {
+          command: {
+            type: "string",
+            description: "The exact command line to run, e.g. 'npm run build'.",
+          },
+          description: {
+            type: "string",
+            description:
+              "Short explanation of why you want to run this command — shown to the user for " +
+              "approval.",
+          },
+        },
+        required: ["command"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "install_package",
+      description:
+        "Install an npm package into the project workspace. Requires the user's approval — the " +
+        "exact package spec is shown before it installs.",
+      parameters: {
+        type: "object",
+        properties: {
+          spec: {
+            type: "string",
+            description: "The npm package name (and optional version), e.g. 'express' or 'lodash@4'.",
+          },
+          description: {
+            type: "string",
+            description:
+              "Short explanation of why you want to install this package — shown to the user for " +
+              "approval.",
+          },
+        },
+        required: ["spec"],
+      },
+    },
+  },
+];
+
 function toolsFor(webContainer: WebContainer | null, available: boolean): ToolDefinition[] {
   return available && webContainer !== null
-    ? [...READONLY_TOOLS, ...WRITE_TOOLS]
+    ? [...READONLY_TOOLS, ...WRITE_TOOLS, ...COMMAND_TOOLS]
     : READONLY_TOOLS;
 }
 
@@ -179,12 +239,13 @@ export interface ChatStreamResult {
 
 export interface PendingApproval {
   callId: string;
-  name: "write_file" | "delete_file";
+  name: "write_file" | "delete_file" | "run_command" | "install_package";
   path: string;
   content: string;
   oldContent: string;
   newContent: string;
   rationale: string;
+  command?: string;
 }
 
 export interface ChatStreamState {
@@ -440,6 +501,24 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
         return finish({ ok: false, error: message });
       };
 
+      const requestApproval = (pending: PendingApproval): Promise<boolean> =>
+        new Promise<boolean>((resolve) => {
+          approvalResolverRef.current = resolve;
+          setApproval(pending);
+        });
+
+      const parseArgs = (raw: string): Record<string, unknown> => {
+        try {
+          return raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+        } catch {
+          return {};
+        }
+      };
+
+      const pushToolResult = (callId: string, content: string) => {
+        workingPayload.push({ role: "tool", tool_call_id: callId, content });
+      };
+
       readLoop: while (true) {
         let turnText = "";
         const drafts = new Map<number, ToolCallDraft>();
@@ -581,12 +660,7 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
         });
 
         for (const call of calls) {
-          let args: Record<string, unknown>;
-          try {
-            args = call.arguments ? (JSON.parse(call.arguments) as Record<string, unknown>) : {};
-          } catch {
-            args = {};
-          }
+          const args = parseArgs(call.arguments);
           const path = typeof args.path === "string" ? args.path : "";
           const content = typeof args.content === "string" ? args.content : "";
 
@@ -598,34 +672,25 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
               result: undefined,
               oldContent,
             });
-            const callApprovalPath = path;
-            const callApprovalName = call.name;
-            const callContent = content;
-            const approved = await new Promise<boolean>((resolve) => {
-              approvalResolverRef.current = resolve;
-              setApproval({
-                callId: call.id,
-                name: callApprovalName,
-                path: callApprovalPath,
-                content: callContent,
-                oldContent,
-                newContent: callApprovalName === "delete_file" ? "" : callContent,
-                rationale: turnText,
-              });
+            const approved = await requestApproval({
+              callId: call.id,
+              name: call.name,
+              path,
+              content,
+              oldContent,
+              newContent: call.name === "delete_file" ? "" : content,
+              rationale: turnText,
             });
             if (!approved) {
               const rejection = "User rejected this action. Please adjust your approach and propose an alternative.";
-              patchAssistantToolCall(assistantId, call.id, {
-                status: "rejected",
-                result: rejection,
-              });
-              workingPayload.push({ role: "tool", tool_call_id: call.id, content: rejection });
+              patchAssistantToolCall(assistantId, call.id, { status: "rejected", result: rejection });
+              pushToolResult(call.id, rejection);
               continue;
             }
             if (!webContainer) {
               const message = "WebContainers is unavailable — cannot apply this change.";
               patchAssistantToolCall(assistantId, call.id, { status: "error", result: message });
-              workingPayload.push({ role: "tool", tool_call_id: call.id, content: message });
+              pushToolResult(call.id, message);
               continue;
             }
             if (call.name === "write_file") {
@@ -636,15 +701,78 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
                 : `Error: ${result.error}. Try again with a valid path.`;
               patchAssistantToolCall(assistantId, call.id, { status, result: resultText });
               if (result.ok) persistFile(path, content);
-              workingPayload.push({ role: "tool", tool_call_id: call.id, content: resultText });
+              pushToolResult(call.id, resultText);
             } else {
               const result = await deleteWorkspaceFile(webContainer, path);
               const status = result.ok ? "done" : "error";
               const resultText = result.ok ? "Deleted file." : `Error: ${result.error}.`;
               patchAssistantToolCall(assistantId, call.id, { status, result: resultText });
               if (result.ok) removeFile(path);
-              workingPayload.push({ role: "tool", tool_call_id: call.id, content: resultText });
+              pushToolResult(call.id, resultText);
             }
+            continue;
+          }
+
+          if (call.name === "run_command" || call.name === "install_package") {
+            const commandText =
+              call.name === "run_command"
+                ? (typeof args.command === "string" ? args.command : "")
+                : `npm install ${typeof args.spec === "string" ? args.spec : ""}`;
+            const description =
+              typeof args.description === "string" ? args.description : "";
+            const denylist = checkCommandDenylist(commandText);
+            if (denylist.blocked) {
+              const blockedText = `Blocked: ${denylist.reason}. Propose a non-destructive alternative.`;
+              patchAssistantToolCall(assistantId, call.id, {
+                status: "blocked",
+                result: blockedText,
+              });
+              pushToolResult(call.id, blockedText);
+              continue;
+            }
+            patchAssistantToolCall(assistantId, call.id, {
+              status: "approval",
+              result: undefined,
+            });
+            const approved = await requestApproval({
+              callId: call.id,
+              name: call.name,
+              path: "",
+              content: "",
+              oldContent: "",
+              newContent: "",
+              rationale: turnText || description || commandText,
+              command: commandText,
+            });
+            if (!approved) {
+              const rejection = "User rejected this action. Please adjust your approach and propose an alternative.";
+              patchAssistantToolCall(assistantId, call.id, { status: "rejected", result: rejection });
+              pushToolResult(call.id, rejection);
+              continue;
+            }
+            if (!webContainer) {
+              const message = "WebContainers is unavailable — cannot run this command.";
+              patchAssistantToolCall(assistantId, call.id, { status: "error", result: message });
+              pushToolResult(call.id, message);
+              continue;
+            }
+            const commandResult =
+              call.name === "run_command"
+                ? await runCommandInContainer(webContainer, commandText)
+                : await installPackageInContainer(
+                    webContainer,
+                    typeof args.spec === "string" ? args.spec : ""
+                  );
+            const resultSummary =
+              commandResult.timedOut
+                ? `Timed out after 60s.`
+                : commandResult.exitCode === 0
+                  ? `Exit code: 0`
+                  : `Exit code: ${commandResult.exitCode}`;
+            const resultText = `${resultSummary}\n${commandResult.output.trim()}`;
+            const status = commandResult.ok ? "done" : "error";
+            patchAssistantToolCall(assistantId, call.id, { status, result: resultText });
+            pushToolResult(call.id, resultText);
             continue;
           }
 
@@ -654,7 +782,7 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
             status: result.ok ? "done" : "error",
             result: contentText,
           });
-          workingPayload.push({ role: "tool", tool_call_id: call.id, content: contentText });
+          pushToolResult(call.id, contentText);
         }
 
         if (controller.signal.aborted) return finish({ ok: false, error: null });
