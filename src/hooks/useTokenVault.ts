@@ -11,14 +11,23 @@ interface VaultState {
   openrouter: EncryptedPayload | null;
 }
 
+type TokenMap = Partial<Record<TokenService, string>>;
+
 const VAULT_KEY = "crackerbox.deploy.vault";
+const TRUSTED_KEY = "crackerbox.vault.trusted";
 const EMPTY_VAULT: VaultState = { github: null, netlify: null, openrouter: null };
+const TRUSTED_SENTINEL = "trusted";
+
+function hasAnyToken(map: TokenMap): boolean {
+  return Object.keys(map).length > 0;
+}
 
 export interface TokenVault {
   unlocked: boolean;
-  tokens: Partial<Record<TokenService, string>>;
+  trusted: boolean;
+  tokens: TokenMap;
   hasStored: (service: TokenService) => boolean;
-  unlock: (passphrase: string) => Promise<void>;
+  unlock: (passphrase: string, trustThisDevice?: boolean) => Promise<void>;
   lock: () => void;
   saveToken: (service: TokenService, token: string) => Promise<void>;
   clearToken: (service: TokenService) => void;
@@ -28,23 +37,30 @@ export interface TokenVault {
 
 export function useTokenVault(): TokenVault {
   const [vault, setVault] = usePersistentState<VaultState>(VAULT_KEY, EMPTY_VAULT);
-  const [passphrase, setPassphrase] = useState<string | null>(null);
-  const [tokens, setTokens] = useState<Partial<Record<TokenService, string>>>({});
+  const [trusted, setTrusted] = usePersistentState<TokenMap>(TRUSTED_KEY, {});
+  const [passphrase, setPassphrase] = useState<string | null>(() =>
+    hasAnyToken(trusted) ? TRUSTED_SENTINEL : null
+  );
+  const [tokens, setTokens] = useState<TokenMap>(trusted);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const hasStored = (service: TokenService) => vault[service] !== null;
+  const hasStored = (service: TokenService) =>
+    vault[service] !== null || trusted[service] !== undefined;
 
-  const unlock = async (phrase: string) => {
+  const unlock = async (phrase: string, trustThisDevice = false) => {
     setBusy(true);
     setError(null);
     try {
-      const result: Partial<Record<TokenService, string>> = {};
+      const result: TokenMap = {};
       if (vault.github) result.github = await decryptToken(phrase, vault.github);
       if (vault.netlify) result.netlify = await decryptToken(phrase, vault.netlify);
       if (vault.openrouter) result.openrouter = await decryptToken(phrase, vault.openrouter);
       setPassphrase(phrase);
       setTokens(result);
+      if (trustThisDevice) {
+        setTrusted((prev) => ({ ...prev, ...result }));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unlock failed");
     } finally {
@@ -55,14 +71,19 @@ export function useTokenVault(): TokenVault {
   const lock = () => {
     setPassphrase(null);
     setTokens({});
+    setTrusted({});
     setError(null);
   };
 
   const saveToken = async (service: TokenService, token: string) => {
     if (!passphrase) throw new Error("Unlock the vault first");
-    const payload = await encryptToken(passphrase, token);
-    setVault((prev) => ({ ...prev, [service]: payload }));
+    const isTrusted = passphrase === TRUSTED_SENTINEL;
+    if (!isTrusted) {
+      const payload = await encryptToken(passphrase, token);
+      setVault((prev) => ({ ...prev, [service]: payload }));
+    }
     setTokens((prev) => ({ ...prev, [service]: token }));
+    setTrusted((prev) => ({ ...prev, [service]: token }));
     setError(null);
   };
 
@@ -73,10 +94,16 @@ export function useTokenVault(): TokenVault {
       delete next[service];
       return next;
     });
+    setTrusted((prev) => {
+      const next = { ...prev };
+      delete next[service];
+      return next;
+    });
   };
 
   return {
     unlocked: passphrase !== null,
+    trusted: passphrase === TRUSTED_SENTINEL,
     tokens,
     hasStored,
     unlock,

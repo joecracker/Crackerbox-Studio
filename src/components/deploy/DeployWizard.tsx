@@ -116,6 +116,7 @@ export default function DeployWizard({ projectName, files, vault }: DeployWizard
   const [step, setStep] = useState<Step>("accounts");
   const [passphrase, setPassphrase] = useState("");
   const [passphraseConfirm, setPassphraseConfirm] = useState("");
+  const [trustDevice, setTrustDevice] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [repoName, setRepoName] = useState(projectName);
   const [repoPrivate, setRepoPrivate] = useState(true);
@@ -137,7 +138,7 @@ export default function DeployWizard({ projectName, files, vault }: DeployWizard
       setSetupError("Passphrases do not match");
       return;
     }
-    void vault.unlock(passphrase);
+    void vault.unlock(passphrase, trustDevice);
   };
 
   const handleDeploy = async () => {
@@ -258,6 +259,16 @@ export default function DeployWizard({ projectName, files, vault }: DeployWizard
               {(vault.error || setupError) && (
                 <p className="text-xs text-red-400">{vault.error ?? setupError}</p>
               )}
+              <label className="flex items-center gap-2 text-xs text-zinc-400">
+                <input
+                  type="checkbox"
+                  checked={trustDevice}
+                  onChange={(e) => setTrustDevice(e.target.checked)}
+                  className="h-4 w-4 rounded border-zinc-700 bg-zinc-900 accent-sky-500"
+                />
+                Trust this device
+                <span className="text-zinc-600">(persist tokens here without re-entering the passphrase)</span>
+              </label>
               <button
                 type="button"
                 onClick={handleUnlock}

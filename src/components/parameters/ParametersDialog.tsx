@@ -1,6 +1,117 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Model } from "../../data/models";
 import type { ParametersState } from "../../hooks/useParameters";
+
+function ModelPicker({
+  list,
+  selectedModelId,
+  selectedModel,
+  loading,
+  onSelect,
+}: {
+  list: Model[];
+  selectedModelId: string;
+  selectedModel: Model | undefined;
+  loading: boolean;
+  onSelect: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+    else setQuery("");
+  }, [open]);
+
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? list.filter(
+        (m) =>
+          m.id.toLowerCase().includes(q) ||
+          m.name.toLowerCase().includes(q) ||
+          m.provider.toLowerCase().includes(q)
+      )
+    : list;
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        disabled={loading}
+        className="flex h-8 w-full items-center justify-between gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-2.5 text-sm text-zinc-100 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <span className="truncate text-left">
+          {loading
+            ? "Loading models…"
+            : selectedModel
+              ? `${selectedModel.name} — ${selectedModel.provider}`
+              : "Select a model"}
+        </span>
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 16 16"
+          fill="none"
+          aria-hidden="true"
+          className="shrink-0 text-zinc-500"
+        >
+          <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute inset-x-0 top-full z-50 mt-1 overflow-hidden rounded-md border border-zinc-800 bg-zinc-900 shadow-2xl">
+            <div className="border-b border-zinc-800 p-1.5">
+              <input
+                ref={inputRef}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setOpen(false);
+                }}
+                placeholder="Search models…"
+                className="h-7 w-full rounded border border-zinc-800 bg-zinc-950 px-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:border-sky-500 focus:outline-none"
+              />
+            </div>
+            <div className="max-h-64 overflow-y-auto py-1">
+              {filtered.length === 0 ? (
+                <p className="px-3 py-2 text-xs text-zinc-500">No matching models.</p>
+              ) : (
+                filtered.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => {
+                      onSelect(m.id);
+                      setOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-zinc-800 ${
+                      m.id === selectedModelId ? "text-sky-400" : "text-zinc-200"
+                    }`}
+                  >
+                    <span className="min-w-0 truncate">
+                      <span className="font-medium">{m.name}</span>
+                      <span className="ml-1.5 text-zinc-500">{m.provider}</span>
+                    </span>
+                    {m.isFree && (
+                      <span className="shrink-0 rounded-sm bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+                        Free
+                      </span>
+                    )}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 interface ParametersDialogProps {
   onClose: () => void;
@@ -40,7 +151,6 @@ export default function ParametersDialog({
   const closeRef = useRef<HTMLButtonElement>(null);
   const list = freeOnly ? models.filter((m) => m.isFree) : models;
   const selectedModel = models.find((m) => m.id === selectedModelId);
-  const selectDisabled = loading || models.length === 0;
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -95,26 +205,13 @@ export default function ParametersDialog({
           >
             Model
           </label>
-          <select
-            id="param-model"
-            value={selectedModelId}
-            onChange={(e) => setSelectedModelId(e.target.value)}
-            disabled={selectDisabled}
-            className="h-8 w-full rounded-md border border-zinc-800 bg-zinc-900 px-2.5 text-sm text-zinc-100 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {loading ? (
-              <option value="">Loading models…</option>
-            ) : models.length === 0 ? (
-              <option value="">Couldn't load models</option>
-            ) : (
-              list.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name} — {m.provider}
-                  {m.isFree ? " (Free)" : ""}
-                </option>
-              ))
-            )}
-          </select>
+          <ModelPicker
+            list={list}
+            selectedModelId={selectedModelId}
+            selectedModel={selectedModel}
+            loading={loading}
+            onSelect={setSelectedModelId}
+          />
           {!loading && error && models.length === 0 && (
             <div className="mt-2 flex items-center justify-between gap-2">
               <span className="min-w-0 truncate text-[11px] text-red-400">{error}</span>

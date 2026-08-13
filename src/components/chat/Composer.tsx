@@ -6,6 +6,45 @@ const MAX_EMBED_SIZE = 1_500_000;
 const ACCEPT =
   "image/*,.txt,.md,.json,.js,.mjs,.cjs,.ts,.tsx,.jsx,.css,.html,.svg,.csv,.yml,.yaml,.toml,.xml,.py,.rs,.go,.java,.sh,.env";
 
+interface SpeechRecognitionAlternative {
+  transcript: string;
+}
+
+interface SpeechRecognitionResultLike {
+  item(index: number): SpeechRecognitionAlternative;
+}
+
+interface SpeechRecognitionLike {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onresult: ((e: { resultIndex: number; results: SpeechRecognitionResultListLike }) => void) | null;
+  onend: (() => void) | null;
+  onerror: ((e: { error: string }) => void) | null;
+  start(): void;
+  stop(): void;
+}
+
+interface SpeechRecognitionResultListLike {
+  length: number;
+  item(index: number): SpeechRecognitionResultLike;
+}
+
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+
+interface SpeechRecognitionWindow extends Window {
+  SpeechRecognition?: SpeechRecognitionCtor;
+  webkitSpeechRecognition?: SpeechRecognitionCtor;
+}
+
+const SpeechRecognitionCtor =
+  typeof window !== "undefined"
+    ? (window as unknown as SpeechRecognitionWindow).SpeechRecognition ??
+      (window as unknown as SpeechRecognitionWindow).webkitSpeechRecognition
+    : undefined;
+
+const speechSupported = SpeechRecognitionCtor != null;
+
 interface ComposerProps {
   onSend: (text: string, attachments: ChatAttachment[]) => void;
   onOpenParameters: () => void;
@@ -29,8 +68,10 @@ export default function Composer({
 }: ComposerProps) {
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+  const [listening, setListening] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   const canSend = text.trim().length > 0 || attachments.length > 0;
 
@@ -47,6 +88,48 @@ export default function Composer({
 
   const handleChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     setText(e.target.value);
+  };
+
+  const stopListening = () => {
+    recognitionRef.current?.stop();
+    recognitionRef.current = null;
+    setListening(false);
+  };
+
+  const toggleListening = () => {
+    if (listening) {
+      stopListening();
+      return;
+    }
+    if (!SpeechRecognitionCtor) return;
+    const recognition = new SpeechRecognitionCtor();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.continuous = false;
+    recognition.onresult = (e) => {
+      let transcript = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const alternative = e.results.item(i).item(0);
+        if (alternative) transcript += alternative.transcript;
+      }
+      if (transcript) {
+        setText((prev) => {
+          const base = prev.replace(/\s+$/, "");
+          return base ? `${base} ${transcript.trim()}` : transcript.trim();
+        });
+      }
+    };
+    recognition.onend = () => {
+      recognitionRef.current = null;
+      setListening(false);
+    };
+    recognition.onerror = () => {
+      recognitionRef.current = null;
+      setListening(false);
+    };
+    recognitionRef.current = recognition;
+    recognition.start();
+    setListening(true);
   };
 
   const resetComposer = () => {
@@ -233,6 +316,30 @@ export default function Composer({
             onChange={handlePickFiles}
             className="hidden"
           />
+          {speechSupported && (
+            <button
+              type="button"
+              onClick={toggleListening}
+              title={listening ? "Stop dictation" : "Dictate with microphone"}
+              aria-label={listening ? "Stop dictation" : "Dictate with microphone"}
+              aria-pressed={listening}
+              className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
+                listening
+                  ? "bg-red-500/20 text-red-400"
+                  : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+              }`}
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path
+                  d="M8 10a2 2 0 0 0 2-2V4a2 2 0 0 0-4 0v4a2 2 0 0 0 2 2Z"
+                  stroke="currentColor"
+                  strokeWidth="1.2"
+                  strokeLinejoin="round"
+                />
+                <path d="M4.5 7.5a3.5 3.5 0 0 0 7 0M8 11v3M6 14h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+              </svg>
+            </button>
+          )}
           <div className="flex-1" />
           <button
             type="button"
