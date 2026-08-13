@@ -11,6 +11,7 @@ import ProjectNameDialog from "./components/projects/ProjectNameDialog";
 import DeployWizard from "./components/deploy/DeployWizard";
 import PersonalitySettings from "./components/settings/PersonalitySettings";
 import ChatView from "./components/chat/ChatView";
+import TerminalPanel from "./components/terminal/TerminalPanel";
 import ParametersDialog from "./components/parameters/ParametersDialog";
 import TokenCounter from "./components/parameters/TokenCounter";
 import ZenView from "./components/zen/ZenView";
@@ -69,6 +70,10 @@ export default function App() {
     setFileTreeWidth,
     toggleFileTree,
     togglePreview,
+    terminalOpen,
+    terminalHeight,
+    toggleTerminal,
+    setTerminalHeight,
   } = useLayout();
   const [sidebarAnimating, sidebarFlash] = useTransientFlag(220);
   const [treeAnimating, treeFlash] = useTransientFlag(220);
@@ -258,6 +263,12 @@ export default function App() {
       shortcut: "Ctrl+Alt+Z",
       run: toggleZen,
     },
+    {
+      id: "toggle-terminal",
+      label: "Toggle terminal",
+      shortcut: "Ctrl+`",
+      run: toggleTerminal,
+    },
   ];
 
   const paletteCommands: PaletteCommand[] = [
@@ -340,6 +351,7 @@ export default function App() {
     { label: "Toggle preview panel", combo: "Ctrl+Shift+P" },
     { label: "Open parameters", combo: "Ctrl+Shift+," },
     { label: "Toggle zen mode", combo: "Ctrl+Alt+Z" },
+    { label: "Toggle terminal", combo: "Ctrl+`" },
     { label: "Close file or dialog", combo: "Esc" },
   ];
 
@@ -384,6 +396,13 @@ export default function App() {
       handler: () => {
         if (dialogOpenRef.current) return;
         toggleZen();
+      },
+    },
+    {
+      combo: "Ctrl+`",
+      handler: () => {
+        if (dialogOpenRef.current) return;
+        toggleTerminal();
       },
     },
   ]);
@@ -458,6 +477,8 @@ export default function App() {
           parametersOpen={parametersOpen}
           onOpenParameters={() => setParametersOpen(true)}
           parametersToggleRef={parametersToggleRef}
+          terminalOpen={terminalOpen}
+          onToggleTerminal={toggleTerminal}
         />
         <div className="flex min-h-0 flex-1">
           <FileTreePanel
@@ -563,6 +584,15 @@ export default function App() {
             />
           )}
         </div>
+        {terminalOpen && (
+          <TerminalPanel
+            projectName={projects.activeProject.name}
+            files={projects.activeProject.files}
+            height={terminalHeight}
+            onHeightChange={setTerminalHeight}
+            onClose={toggleTerminal}
+          />
+        )}
       </div>
       {parametersOpen && (
         <ParametersDialog

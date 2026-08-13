@@ -12,6 +12,10 @@ export const PREVIEW_MIN_RATIO = 0.4;
 export const PREVIEW_MAX_RATIO = 0.66;
 export const PREVIEW_DEFAULT_RATIO = 0.5;
 
+export const TERMINAL_MIN = 120;
+export const TERMINAL_MAX = 600;
+export const TERMINAL_DEFAULT = 220;
+
 export const previewMinWidth = () => Math.round(window.innerWidth * PREVIEW_MIN_RATIO);
 export const previewMaxWidth = () => Math.round(window.innerWidth * PREVIEW_MAX_RATIO);
 
@@ -22,6 +26,8 @@ export interface LayoutState {
   previewCollapsed: boolean;
   fileTreeWidth: number;
   fileTreeCollapsed: boolean;
+  terminalOpen: boolean;
+  terminalHeight: number;
 }
 
 const DEFAULT_LAYOUT: LayoutState = {
@@ -31,6 +37,8 @@ const DEFAULT_LAYOUT: LayoutState = {
   previewCollapsed: false,
   fileTreeWidth: 240,
   fileTreeCollapsed: false,
+  terminalOpen: false,
+  terminalHeight: TERMINAL_DEFAULT,
 };
 
 function clamp(n: number, min: number, max: number): number {
@@ -61,6 +69,12 @@ export function useLayout() {
   const togglePreview = () =>
     setLayout((prev) => ({ ...prev, previewCollapsed: !prev.previewCollapsed }));
 
+  const toggleTerminal = () =>
+    setLayout((prev) => ({ ...prev, terminalOpen: !prev.terminalOpen }));
+
+  const setTerminalHeight = (height: number) =>
+    setLayout((prev) => ({ ...prev, terminalHeight: clamp(height, TERMINAL_MIN, TERMINAL_MAX) }));
+
   return {
     sidebarWidth: layout.sidebarWidth,
     sidebarCollapsed: layout.sidebarCollapsed,
@@ -76,5 +90,9 @@ export function useLayout() {
     toggleFileTree,
     previewCollapsed: layout.previewCollapsed,
     togglePreview,
+    terminalOpen: layout.terminalOpen,
+    terminalHeight: layout.terminalHeight,
+    toggleTerminal,
+    setTerminalHeight,
   };
 }
