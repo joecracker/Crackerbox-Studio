@@ -1,6 +1,8 @@
 import type { ChatMessage } from "../../hooks/useChatHistory";
+import type { PendingApproval } from "../../hooks/useChatStream";
 import Composer from "./Composer";
 import MessageList from "./MessageList";
+import ApprovalCard from "./ApprovalCard";
 
 interface ChatViewProps {
   projectName: string;
@@ -14,6 +16,11 @@ interface ChatViewProps {
   onDismissStreamError: () => void;
   modelLabel: string | null;
   visionSupported: boolean;
+  approval: PendingApproval | null;
+  onApprove: () => void;
+  onReject: () => void;
+  runtimeAvailable: boolean;
+  runtimeError: string | null;
 }
 
 export default function ChatView({
@@ -28,6 +35,11 @@ export default function ChatView({
   onDismissStreamError,
   modelLabel,
   visionSupported,
+  approval,
+  onApprove,
+  onReject,
+  runtimeAvailable,
+  runtimeError,
 }: ChatViewProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -36,6 +48,19 @@ export default function ChatView({
         <span className="ml-auto shrink-0 text-[11px] text-zinc-600">chat</span>
       </div>
       <MessageList messages={messages} streaming={streaming} />
+      {!runtimeAvailable && (
+        <div className="mx-4 mb-2 flex items-start gap-2 rounded-md border border-amber-900/60 bg-amber-950/40 px-3 py-2">
+          <p className="min-w-0 flex-1 text-[11px] leading-relaxed text-amber-300">
+            File writes are disabled in this browser — WebContainers isn&apos;t available here.
+            {runtimeError ? ` ${runtimeError}` : ""}
+          </p>
+        </div>
+      )}
+      {approval && (
+        <div className="mx-4 mb-2 shrink-0">
+          <ApprovalCard approval={approval} onApprove={onApprove} onReject={onReject} />
+        </div>
+      )}
       {streamError && (
         <div className="mx-4 mb-2 flex items-start gap-2 rounded-md border border-red-900/60 bg-red-950/40 px-3 py-2">
           <svg

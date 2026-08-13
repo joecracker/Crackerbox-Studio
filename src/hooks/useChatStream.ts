@@ -1,12 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ChatAttachment, ChatMessage } from "./useChatHistory";
+import { createWorkspaceFS, executeWorkspaceTool, getFile } from "../utils/workspace";
+import { writeWorkspaceFile, deleteWorkspaceFile } from "../utils/workspaceWebContainer";
+import type {
+  ChatToolCall,
+  ChatAttachment,
+  ChatMessage,
+  ChatToolCallPartial,
+} from "./useChatHistory";
+import type { DemoFile } from "../data/demoFiles";
+import type { WebContainer } from "@webcontainer/api";
 
 const CHAT_URL = "https://openrouter.ai/api/v1/chat/completions";
 const HISTORY_LIMIT = 40;
+const MAX_TOOL_ITERATIONS = 8;
 const TEXT_FILE_RE =
   /\.(txt|md|markdown|json|js|jsx|mjs|cjs|ts|tsx|css|html|svg|csv|yml|yaml|toml|xml|py|rs|go|java|sh|env)$/i;
-
-type PayloadRole = "system" | "user" | "assistant";
 
 interface PayloadTextPart {
   type: "text";
@@ -20,6 +28,126 @@ interface PayloadImagePart {
 
 type PayloadContent = string | (PayloadTextPart | PayloadImagePart)[];
 
+interface ToolCallPayload {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+}
+
+interface PayloadToolMessage {
+  role: "tool";
+  tool_call_id: string;
+  content: string;
+}
+
+type PayloadMessage =
+  | { role: "system" | "user" | "assistant"; content: PayloadContent; tool_calls?: ToolCallPayload[] }
+  | PayloadToolMessage;
+
+interface ToolDefinition {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
+}
+
+const READONLY_TOOLS: ToolDefinition[] = [
+  {
+    type: "function",
+    function: {
+      name: "list_directory",
+      description:
+        "List the entries in a directory of the active project workspace. Directories are " +
+        "suffixed with '/'. Pass an empty string ('') for the project root.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description:
+              "Directory path relative to the project root, e.g. 'src' or 'src/components'. " +
+              "Use forward slashes.",
+          },
+        },
+        required: ["path"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_file",
+      description:
+        "Read the contents of a text file in the active project workspace. Returns the raw " +
+        "file content.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "File path relative to the project root, e.g. 'src/App.tsx'.",
+          },
+        },
+        required: ["path"],
+      },
+    },
+  },
+];
+
+const WRITE_TOOLS: ToolDefinition[] = [
+  {
+    type: "function",
+    function: {
+      name: "write_file",
+      description:
+        "Write a text file to the active project workspace. Requires the user's approval — " +
+        "the full new file content is shown as a diff before it is applied. Provide the " +
+        "complete new file contents.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "File path relative to the project root, e.g. 'src/App.tsx'.",
+          },
+          content: {
+            type: "string",
+            description: "The complete new file contents.",
+          },
+        },
+        required: ["path", "content"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_file",
+      description:
+        "Delete a text file from the active project workspace. Requires the user's approval — " +
+        "the file content is shown before it is removed.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "File path relative to the project root, e.g. 'src/tmp.ts'.",
+          },
+        },
+        required: ["path"],
+      },
+    },
+  },
+];
+
+function toolsFor(webContainer: WebContainer | null, available: boolean): ToolDefinition[] {
+  return available && webContainer !== null
+    ? [...READONLY_TOOLS, ...WRITE_TOOLS]
+    : READONLY_TOOLS;
+}
+
 export interface ChatStreamOptions {
   activeProjectId: string;
   messages: ChatMessage[];
@@ -28,9 +156,20 @@ export interface ChatStreamOptions {
   temperature: number;
   maxTokens: number;
   getApiKey: () => string | null;
+  workspaceFiles: DemoFile[];
+  webContainer: WebContainer | null;
+  webContainerAvailable: boolean;
+  persistFile: (path: string, content: string) => void;
+  removeFile: (path: string) => void;
   appendAssistant: () => string;
   patchAssistant: (id: string, updater: (text: string) => string) => void;
   removeAssistant: (id: string) => void;
+  setAssistantToolCalls: (id: string, calls: ChatToolCall[]) => void;
+  patchAssistantToolCall: (
+    id: string,
+    callId: string,
+    patch: ChatToolCallPartial
+  ) => void;
 }
 
 export interface ChatStreamResult {
@@ -38,11 +177,23 @@ export interface ChatStreamResult {
   error: string | null;
 }
 
+export interface PendingApproval {
+  callId: string;
+  name: "write_file" | "delete_file";
+  path: string;
+  content: string;
+  oldContent: string;
+  newContent: string;
+  rationale: string;
+}
+
 export interface ChatStreamState {
   busy: boolean;
   error: string | null;
   dismissError: () => void;
   stream: (text: string, attachments: ChatAttachment[]) => Promise<ChatStreamResult>;
+  approval: PendingApproval | null;
+  resolveApproval: (callId: string, approved: boolean) => void;
 }
 
 function decodeDataUrl(dataUrl: string): string {
@@ -82,11 +233,22 @@ function contentFor(text: string, attachments: ChatAttachment[]): PayloadContent
   return parts;
 }
 
-function messageToPayload(message: ChatMessage): {
-  role: "user" | "assistant";
-  content: PayloadContent;
-} {
-  return { role: message.role, content: contentFor(message.text, message.attachments) };
+function messageToPayloadMessages(message: ChatMessage): PayloadMessage[] {
+  const base: PayloadMessage = {
+    role: message.role,
+    content: contentFor(message.text, message.attachments),
+  };
+  const calls = message.toolCalls;
+  if (message.role !== "assistant" || !calls || calls.length === 0) return [base];
+  const toolCalls: ToolCallPayload[] = calls.map((c) => ({
+    id: c.id,
+    type: "function",
+    function: { name: c.name, arguments: c.arguments },
+  }));
+  const tools: PayloadToolMessage[] = calls
+    .filter((c) => c.result != null)
+    .map((c) => ({ role: "tool", tool_call_id: c.id, content: c.result as string }));
+  return [{ ...base, tool_calls: toolCalls }, ...tools];
 }
 
 function extractError(json: unknown): string | null {
@@ -101,28 +263,84 @@ function extractError(json: unknown): string | null {
   return null;
 }
 
-function candidateContent(json: unknown): string {
-  if (!json || typeof json !== "object") return "";
+interface ToolCallDeltaFragment {
+  index?: number;
+  id?: string;
+  name?: string;
+  arguments?: string;
+}
+
+function extractDelta(json: unknown): { content?: string; toolCalls?: ToolCallDeltaFragment[] } {
+  if (!json || typeof json !== "object") return {};
   const choices = (json as Record<string, unknown>).choices;
-  if (!Array.isArray(choices) || choices.length === 0) return "";
+  if (!Array.isArray(choices) || choices.length === 0) return {};
   const choice = choices[0] as Record<string, unknown>;
   const delta = choice.delta;
-  if (delta && typeof delta === "object") {
-    const content = (delta as Record<string, unknown>).content;
-    if (typeof content === "string") return content;
+  if (!delta || typeof delta !== "object") {
+    const fullMessage = choice.message as Record<string, unknown> | undefined;
+    if (fullMessage && typeof fullMessage.content === "string") {
+      return { content: fullMessage.content };
+    }
+    return {};
   }
-  const fullMessage = choice.message as Record<string, unknown> | undefined;
-  if (fullMessage && typeof fullMessage.content === "string") return fullMessage.content;
-  return "";
+  const out: { content?: string; toolCalls?: ToolCallDeltaFragment[] } = {};
+  const content = (delta as Record<string, unknown>).content;
+  if (typeof content === "string") out.content = content;
+  const toolCalls = (delta as Record<string, unknown>).tool_calls;
+  if (Array.isArray(toolCalls)) {
+    out.toolCalls = toolCalls.map((tc) => {
+      const t = (tc ?? {}) as Record<string, unknown>;
+      const fn = (t.function ?? {}) as Record<string, unknown>;
+      const frag: ToolCallDeltaFragment = {};
+      if (typeof t.index === "number") frag.index = t.index;
+      if (typeof t.id === "string") frag.id = t.id;
+      if (typeof fn.name === "string") frag.name = fn.name;
+      if (typeof fn.arguments === "string") frag.arguments = fn.arguments;
+      return frag;
+    });
+  }
+  return out;
+}
+
+interface ToolCallDraft {
+  index: number;
+  id?: string;
+  name?: string;
+  arguments: string;
+}
+
+function createToolCallId(): string {
+  return `call_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function looksToolRelated(reason: string): boolean {
+  return /tool|tools|function|unsupported parameter|unknown parameter/i.test(reason);
+}
+
+function statusReason(status: number, model: string): string {
+  switch (status) {
+    case 401:
+      return "Invalid OpenRouter API key — save a new one in the vault.";
+    case 402:
+      return "Insufficient OpenRouter credits — add funds to your account.";
+    case 429:
+      return "Rate limited (429) — wait a moment and try again.";
+    case 404:
+      return `Model unavailable (${model}).`;
+    default:
+      return `Request failed (${status}).`;
+  }
 }
 
 export function useChatStream(options: ChatStreamOptions): ChatStreamState {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [approval, setApproval] = useState<PendingApproval | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const busyRef = useRef(false);
   const optionsRef = useRef(options);
   optionsRef.current = options;
+  const approvalResolverRef = useRef<((approved: boolean) => void) | null>(null);
 
   useEffect(() => {
     return () => abortRef.current?.abort();
@@ -136,10 +354,23 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
       abortRef.current = null;
       busyRef.current = false;
       setBusy(false);
+      setApproval(null);
+      const resolver = approvalResolverRef.current;
+      approvalResolverRef.current = null;
+      resolver?.(false);
     }
   }, [options.activeProjectId]);
 
   const dismissError = useCallback(() => setError(null), []);
+
+  const resolveApproval = useCallback((callId: string, approved: boolean) => {
+    setApproval((current) => {
+      if (current && current.callId === callId) return null;
+      return current;
+    });
+    approvalResolverRef.current?.(approved);
+    approvalResolverRef.current = null;
+  }, []);
 
   const stream = useCallback(
     async (text: string, attachments: ChatAttachment[]): Promise<ChatStreamResult> => {
@@ -150,9 +381,16 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
         maxTokens,
         messages,
         getApiKey,
+        workspaceFiles,
+        webContainer,
+        webContainerAvailable,
+        persistFile,
+        removeFile,
         appendAssistant,
         patchAssistant,
         removeAssistant,
+        setAssistantToolCalls,
+        patchAssistantToolCall,
       } = optionsRef.current;
 
       const guardError = !model
@@ -171,30 +409,28 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
       setBusy(true);
       setError(null);
 
-      const assistantId = appendAssistant();
+      let assistantId = appendAssistant();
       const controller = new AbortController();
       abortRef.current = controller;
 
-      const userPayload = messageToPayload({
-        id: "",
-        role: "user",
-        text,
-        attachments,
-        createdAt: Date.now(),
-      });
-
-      const payload: { role: PayloadRole; content: PayloadContent }[] = [
+      const workingPayload: PayloadMessage[] = [
         { role: "system", content: systemPrompt },
-        ...messages.slice(-HISTORY_LIMIT).map(messageToPayload),
-        userPayload,
+        ...messages.slice(-HISTORY_LIMIT).flatMap(messageToPayloadMessages),
+        { role: "user", content: contentFor(text, attachments) },
       ];
+      const fs = createWorkspaceFS(workspaceFiles);
 
       let receivedText = "";
+      let toolsEnabled = true;
+      let toolMessagesPushed = false;
+      let toolIterations = 0;
 
       const finish = (result: ChatStreamResult): ChatStreamResult => {
         if (abortRef.current === controller) abortRef.current = null;
         busyRef.current = false;
         setBusy(false);
+        setApproval(null);
+        approvalResolverRef.current = null;
         return result;
       };
 
@@ -204,102 +440,230 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
         return finish({ ok: false, error: message });
       };
 
-      let res: Response;
-      try {
-        res = await fetch(CHAT_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${getApiKey()}`,
-          },
-          body: JSON.stringify({
-            model,
-            messages: payload,
-            stream: true,
-            temperature,
-            max_tokens: maxTokens,
-          }),
-          signal: controller.signal,
-        });
-      } catch (e) {
-        if (controller.signal.aborted) {
-          if (receivedText === "") removeAssistant(assistantId);
-          return finish({ ok: false, error: null });
-        }
-        const message = e instanceof Error && e.message ? e.message : "Network error";
-        return fail(`Request failed: ${message}`);
-      }
-
-      if (!res.ok) {
-        let reason = "";
-        try {
-          reason = extractError((await res.json()) as unknown) ?? "";
-        } catch {
-          // non-JSON error body
-        }
-        if (!reason) {
-          reason =
-            res.status === 401
-              ? "Invalid OpenRouter API key — save a new one in the vault."
-              : res.status === 402
-                ? "Insufficient OpenRouter credits — add funds to your account."
-                : res.status === 429
-                  ? "Rate limited (429) — wait a moment and try again."
-                  : res.status === 404
-                    ? `Model unavailable (${model}).`
-                    : `Request failed (${res.status}).`;
-        }
-        return fail(reason);
-      }
-
-      try {
-        const reader = res.body?.getReader();
-        if (!reader) throw new Error("Response has no readable stream");
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-
-          let newline = buffer.indexOf("\n");
-          while (newline !== -1) {
-            const line = buffer.slice(0, newline).trim();
-            buffer = buffer.slice(newline + 1);
-            if (line.startsWith("data:")) {
-              const data = line.slice(5).trim();
-              if (data === "[DONE]") return finish({ ok: true, error: null });
-              let json: unknown;
-              try {
-                json = JSON.parse(data);
-              } catch {
-                continue;
-              }
-              const err = extractError(json);
-              if (err) throw new Error(err);
-              const content = candidateContent(json);
-              if (content) {
-                receivedText += content;
-                patchAssistant(assistantId, (prev) => prev + content);
-              }
+      readLoop: while (true) {
+        let turnText = "";
+        const drafts = new Map<number, ToolCallDraft>();
+        let nextCallIndex = 0;
+        const collect = (fragments: ToolCallDeltaFragment[]) => {
+          for (const frag of fragments) {
+            const index = frag.index ?? nextCallIndex++;
+            let draft = drafts.get(index);
+            if (!draft) {
+              draft = { index, arguments: "" };
+              drafts.set(index, draft);
             }
-            newline = buffer.indexOf("\n");
+            if (frag.id) draft.id = frag.id;
+            if (frag.name) draft.name = frag.name;
+            if (frag.arguments) draft.arguments += frag.arguments;
           }
+        };
+
+        let res: Response;
+        try {
+          res = await fetch(CHAT_URL, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${getApiKey()}`,
+            },
+            body: JSON.stringify({
+              model,
+              messages: workingPayload,
+              stream: true,
+              temperature,
+              max_tokens: maxTokens,
+              ...(toolsEnabled
+                ? { tools: toolsFor(webContainer, webContainerAvailable), tool_choice: "auto" as const }
+                : {}),
+            }),
+            signal: controller.signal,
+          });
+        } catch (e) {
+          if (controller.signal.aborted) {
+            if (receivedText === "") removeAssistant(assistantId);
+            return finish({ ok: false, error: null });
+          }
+          const message = e instanceof Error && e.message ? e.message : "Network error";
+          return fail(`Request failed: ${message}`);
         }
 
-        return finish({ ok: true, error: null });
-      } catch (e) {
-        if (controller.signal.aborted) {
-          if (receivedText === "") removeAssistant(assistantId);
-          return finish({ ok: false, error: null });
+        if (!res.ok) {
+          let reason = "";
+          try {
+            reason = extractError((await res.json()) as unknown) ?? "";
+          } catch {
+            // non-JSON error body
+          }
+          if (!reason) reason = statusReason(res.status, model);
+          if (
+            toolsEnabled &&
+            !toolMessagesPushed &&
+            res.status === 400 &&
+            looksToolRelated(reason)
+          ) {
+            toolsEnabled = false;
+            continue;
+          }
+          return fail(reason);
         }
-        const message = e instanceof Error && e.message ? e.message : "Streaming failed";
-        return fail(message);
+
+        try {
+          const reader = res.body?.getReader();
+          if (!reader) throw new Error("Response has no readable stream");
+          const decoder = new TextDecoder();
+          let buffer = "";
+
+          streamLoop: while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            let newline = buffer.indexOf("\n");
+            while (newline !== -1) {
+              const line = buffer.slice(0, newline).trim();
+              buffer = buffer.slice(newline + 1);
+              if (line.startsWith("data:")) {
+                const data = line.slice(5).trim();
+                if (data === "[DONE]") break streamLoop;
+                let json: unknown;
+                try {
+                  json = JSON.parse(data);
+                } catch {
+                  continue;
+                }
+                const err = extractError(json);
+                if (err) throw new Error(err);
+                const delta = extractDelta(json);
+                if (delta.content) {
+                  turnText += delta.content;
+                  receivedText += delta.content;
+                  patchAssistant(assistantId, (prev) => prev + delta.content);
+                }
+                if (delta.toolCalls && delta.toolCalls.length > 0) collect(delta.toolCalls);
+              }
+              newline = buffer.indexOf("\n");
+            }
+          }
+        } catch (e) {
+          if (controller.signal.aborted) {
+            if (receivedText === "") removeAssistant(assistantId);
+            return finish({ ok: false, error: null });
+          }
+          const message = e instanceof Error && e.message ? e.message : "Streaming failed";
+          return fail(message);
+        }
+
+        const callDrafts = [...drafts.values()].sort((a, b) => a.index - b.index);
+        if (callDrafts.length === 0) return finish({ ok: true, error: null });
+
+        if (toolIterations >= MAX_TOOL_ITERATIONS) {
+          return fail("Stopped: the model kept requesting tools beyond the iteration limit.");
+        }
+        toolIterations++;
+        toolMessagesPushed = true;
+
+        const calls: ChatToolCall[] = callDrafts.map((d) => ({
+          id: d.id ?? createToolCallId(),
+          name: d.name ?? "unknown",
+          arguments: d.arguments,
+          status: "running",
+        }));
+        setAssistantToolCalls(assistantId, calls);
+
+        workingPayload.push({
+          role: "assistant",
+          content: turnText,
+          tool_calls: calls.map((c) => ({
+            id: c.id,
+            type: "function",
+            function: { name: c.name, arguments: c.arguments },
+          })),
+        });
+
+        for (const call of calls) {
+          let args: Record<string, unknown>;
+          try {
+            args = call.arguments ? (JSON.parse(call.arguments) as Record<string, unknown>) : {};
+          } catch {
+            args = {};
+          }
+          const path = typeof args.path === "string" ? args.path : "";
+          const content = typeof args.content === "string" ? args.content : "";
+
+          if (call.name === "write_file" || call.name === "delete_file") {
+            const oldFile = getFile(workspaceFiles, path);
+            const oldContent = oldFile && oldFile.type === "file" ? (oldFile.content ?? "") : "";
+            patchAssistantToolCall(assistantId, call.id, {
+              status: "approval",
+              result: undefined,
+              oldContent,
+            });
+            const callApprovalPath = path;
+            const callApprovalName = call.name;
+            const callContent = content;
+            const approved = await new Promise<boolean>((resolve) => {
+              approvalResolverRef.current = resolve;
+              setApproval({
+                callId: call.id,
+                name: callApprovalName,
+                path: callApprovalPath,
+                content: callContent,
+                oldContent,
+                newContent: callApprovalName === "delete_file" ? "" : callContent,
+                rationale: turnText,
+              });
+            });
+            if (!approved) {
+              const rejection = "User rejected this action. Please adjust your approach and propose an alternative.";
+              patchAssistantToolCall(assistantId, call.id, {
+                status: "rejected",
+                result: rejection,
+              });
+              workingPayload.push({ role: "tool", tool_call_id: call.id, content: rejection });
+              continue;
+            }
+            if (!webContainer) {
+              const message = "WebContainers is unavailable — cannot apply this change.";
+              patchAssistantToolCall(assistantId, call.id, { status: "error", result: message });
+              workingPayload.push({ role: "tool", tool_call_id: call.id, content: message });
+              continue;
+            }
+            if (call.name === "write_file") {
+              const result = await writeWorkspaceFile(webContainer, path, content);
+              const status = result.ok ? "done" : "error";
+              const resultText = result.ok
+                ? `Wrote file (${result.size} bytes).`
+                : `Error: ${result.error}. Try again with a valid path.`;
+              patchAssistantToolCall(assistantId, call.id, { status, result: resultText });
+              if (result.ok) persistFile(path, content);
+              workingPayload.push({ role: "tool", tool_call_id: call.id, content: resultText });
+            } else {
+              const result = await deleteWorkspaceFile(webContainer, path);
+              const status = result.ok ? "done" : "error";
+              const resultText = result.ok ? "Deleted file." : `Error: ${result.error}.`;
+              patchAssistantToolCall(assistantId, call.id, { status, result: resultText });
+              if (result.ok) removeFile(path);
+              workingPayload.push({ role: "tool", tool_call_id: call.id, content: resultText });
+            }
+            continue;
+          }
+
+          const result = executeWorkspaceTool(fs, call.name, call.arguments);
+          const contentText = result.ok ? result.content : `Error: ${result.error}`;
+          patchAssistantToolCall(assistantId, call.id, {
+            status: result.ok ? "done" : "error",
+            result: contentText,
+          });
+          workingPayload.push({ role: "tool", tool_call_id: call.id, content: contentText });
+        }
+
+        if (controller.signal.aborted) return finish({ ok: false, error: null });
+
+        assistantId = appendAssistant();
       }
     },
     []
   );
 
-  return { busy, error, dismissError, stream };
+  return { busy, error, dismissError, stream, approval, resolveApproval };
 }

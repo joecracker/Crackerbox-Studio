@@ -41,6 +41,7 @@ import { usePersonality } from "./hooks/usePersonality";
 import { useChatHistory } from "./hooks/useChatHistory";
 import type { ChatAttachment } from "./hooks/useChatHistory";
 import { useChatStream } from "./hooks/useChatStream";
+import { useWebContainer } from "./hooks/useWebContainer";
 import { flattenFiles } from "./data/demoFiles";
 import type { DemoFile } from "./data/demoFiles";
 import { extractPreview } from "./utils/preview";
@@ -52,6 +53,16 @@ function updateFileContent(nodes: DemoFile[], path: string, content: string): De
     if (node.children) return { ...node, children: updateFileContent(node.children, path, content) };
     return node;
   });
+}
+
+function removeFileNode(nodes: DemoFile[], path: string): DemoFile[] {
+  const next: DemoFile[] = [];
+  for (const node of nodes) {
+    if (node.path === path) continue;
+    if (node.children) next.push({ ...node, children: removeFileNode(node.children, path) });
+    else next.push(node);
+  }
+  return next;
 }
 
 export default function App() {
@@ -99,11 +110,33 @@ export default function App() {
   const projects = useProjects();
   const vault = useTokenVault();
   const personality = usePersonality();
+  const webContainer = useWebContainer();
   const chat = useChatHistory(projects.activeProjectId);
   const activeFiles = projects.activeProject.files;
   const fileTree = useFileTree(activeFiles);
   const edits = useEdits();
   const parameters = useParameters();
+
+  const persistFile = useMemo(
+    () => (path: string, content: string) => {
+      projects.updateActiveFiles((prev) => updateFileContent(prev, path, content));
+    },
+    [projects]
+  );
+
+  const removeFile = useMemo(
+    () => (path: string) => {
+      projects.updateActiveFiles((prev) => removeFileNode(prev, path));
+    },
+    [projects]
+  );
+
+  useEffect(() => {
+    if (!webContainer.ready && !webContainer.booting && webContainer.available) {
+      void webContainer.boot(activeFiles);
+    }
+  }, [webContainer, activeFiles]);
+
   const chatStream = useChatStream({
     activeProjectId: projects.activeProjectId,
     messages: chat.messages,
@@ -112,9 +145,16 @@ export default function App() {
     temperature: parameters.temperature,
     maxTokens: parameters.maxTokens,
     getApiKey: () => (vault.unlocked ? vault.tokens.openrouter ?? null : null),
+    workspaceFiles: activeFiles,
+    webContainer: webContainer.container,
+    webContainerAvailable: webContainer.available,
+    persistFile,
+    removeFile,
     appendAssistant: chat.appendAssistant,
     patchAssistant: chat.patchAssistant,
     removeAssistant: chat.removeAssistant,
+    setAssistantToolCalls: chat.setAssistantToolCalls,
+    patchAssistantToolCall: chat.patchAssistantToolCall,
   });
   const modelSource = useModels();
 
@@ -566,6 +606,19 @@ export default function App() {
                 onDismissStreamError={chatStream.dismissError}
                 modelLabel={modelLabel}
                 visionSupported={visionSupported}
+                approval={chatStream.approval}
+                onApprove={
+                  chatStream.approval
+                    ? () => chatStream.resolveApproval(chatStream.approval!.callId, true)
+                    : () => {}
+                }
+                onReject={
+                  chatStream.approval
+                    ? () => chatStream.resolveApproval(chatStream.approval!.callId, false)
+                    : () => {}
+                }
+                runtimeAvailable={webContainer.available}
+                runtimeError={webContainer.error}
               />
             )}
             <footer className="flex h-10 shrink-0 items-center justify-between border-t border-zinc-800 px-4 text-xs text-zinc-500">

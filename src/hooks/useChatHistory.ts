@@ -9,12 +9,24 @@ export interface ChatAttachment {
   dataUrl?: string;
 }
 
+export interface ChatToolCall {
+  id: string;
+  name: string;
+  arguments: string;
+  status: "running" | "done" | "error" | "approval" | "rejected";
+  result?: string;
+  oldContent?: string;
+}
+
+export type ChatToolCallPartial = Partial<Pick<ChatToolCall, "status" | "result" | "oldContent">>;
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   text: string;
   attachments: ChatAttachment[];
   createdAt: number;
+  toolCalls?: ChatToolCall[];
 }
 
 const CHAT_KEY = "crackerbox.chat";
@@ -82,5 +94,40 @@ export function useChatHistory(activeProjectId: string) {
     [updateProject]
   );
 
-  return { messages, send, appendAssistant, patchAssistant, removeAssistant };
+  const setAssistantToolCalls = useCallback(
+    (id: string, calls: ChatToolCall[]) => {
+      updateProject((list) =>
+        list.map((m) => (m.id === id && m.role === "assistant" ? { ...m, toolCalls: calls } : m))
+      );
+    },
+    [updateProject]
+  );
+
+  const patchAssistantToolCall = useCallback(
+    (id: string, callId: string, patch: Partial<Pick<ChatToolCall, "status" | "result">>) => {
+      updateProject((list) =>
+        list.map((m) =>
+          m.id === id && m.role === "assistant"
+            ? {
+                ...m,
+                toolCalls: (m.toolCalls ?? []).map((c) =>
+                  c.id === callId ? { ...c, ...patch } : c
+                ),
+              }
+            : m
+        )
+      );
+    },
+    [updateProject]
+  );
+
+  return {
+    messages,
+    send,
+    appendAssistant,
+    patchAssistant,
+    removeAssistant,
+    setAssistantToolCalls,
+    patchAssistantToolCall,
+  };
 }
