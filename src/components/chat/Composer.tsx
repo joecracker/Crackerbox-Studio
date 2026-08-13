@@ -51,6 +51,8 @@ interface ComposerProps {
   disabled?: boolean;
   disabledReason?: string | null;
   busy?: boolean;
+  modelLabel?: string | null;
+  visionSupported?: boolean;
 }
 
 function formatSize(bytes: number): string {
@@ -65,15 +67,22 @@ export default function Composer({
   disabled = false,
   disabledReason = null,
   busy = false,
+  modelLabel = null,
+  visionSupported = true,
 }: ComposerProps) {
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [listening, setListening] = useState(false);
+  const [visionWarning, setVisionWarning] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   const canSend = text.trim().length > 0 || attachments.length > 0;
+
+  useEffect(() => {
+    if (visionSupported) setVisionWarning(null);
+  }, [visionSupported]);
 
   const syncHeight = () => {
     const el = textareaRef.current;
@@ -168,7 +177,16 @@ export default function Composer({
   };
 
   const addFiles = (files: File[]) => {
-    files.forEach((file) => {
+    const images = files.filter((f) => f.type.startsWith("image/"));
+    const allowed = visionSupported ? files : files.filter((f) => !f.type.startsWith("image/"));
+    if (images.length > 0 && !visionSupported) {
+      setVisionWarning(
+        "This model doesn't support images — switch to a vision model in Parameters to attach them."
+      );
+    } else if (images.length > 0) {
+      setVisionWarning(null);
+    }
+    allowed.forEach((file) => {
       const attachment: ChatAttachment = {
         id: `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         name: file.name,
@@ -271,6 +289,37 @@ export default function Composer({
             <span>{disabledReason}</span>
           </div>
         )}
+        {visionWarning && (
+          <div className="flex items-start gap-1.5 border-b border-zinc-800 px-3 py-1.5 text-[11px] leading-relaxed text-amber-400/90">
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 16 16"
+              fill="none"
+              aria-hidden="true"
+              className="mt-0.5 shrink-0"
+            >
+              <path
+                d="M8 1.8 15 13.8H1L8 1.8Z"
+                stroke="currentColor"
+                strokeWidth="1.3"
+                strokeLinejoin="round"
+              />
+              <path d="M8 6v3M8 11.2v.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            </svg>
+            <span className="min-w-0 flex-1">{visionWarning}</span>
+            <button
+              type="button"
+              onClick={() => setVisionWarning(null)}
+              aria-label="Dismiss warning"
+              className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-700 hover:text-zinc-100"
+            >
+              <svg width="9" height="9" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+        )}
         <textarea
           ref={textareaRef}
           value={text}
@@ -338,6 +387,19 @@ export default function Composer({
                 />
                 <path d="M4.5 7.5a3.5 3.5 0 0 0 7 0M8 11v3M6 14h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
               </svg>
+            </button>
+          )}
+          {modelLabel && (
+            <button
+              type="button"
+              onClick={onOpenParameters}
+              title={modelLabel}
+              className="flex h-7 max-w-44 shrink-0 items-center gap-1.5 truncate rounded-md border border-zinc-800 bg-zinc-900 px-2 text-[11px] text-zinc-400 transition-colors hover:border-sky-600 hover:text-sky-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+            >
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true" className="shrink-0">
+                <path d="M6 13.5 13.5 6a2.1 2.1 0 0 0-3-3L3 10.5 2 14l3.5-1ZM10 3.5 12.5 6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span className="truncate">{modelLabel}</span>
             </button>
           )}
           <div className="flex-1" />

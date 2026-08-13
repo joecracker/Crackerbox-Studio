@@ -6,6 +6,8 @@ export interface Model {
   contextLength: number;
   promptPrice: number;
   completionPrice: number;
+  inputModalities: string[];
+  outputModalities: string[];
 }
 
 export interface OpenRouterModel {
@@ -15,6 +17,11 @@ export interface OpenRouterModel {
   pricing: {
     prompt?: string;
     completion?: string;
+  };
+  architecture?: {
+    modality?: string;
+    input_modalities?: string[];
+    output_modalities?: string[];
   };
 }
 
@@ -44,6 +51,8 @@ export function normalizeModel(raw: OpenRouterModel): Model {
     contextLength: raw.context_length ?? 0,
     promptPrice,
     completionPrice,
+    inputModalities: raw.architecture?.input_modalities ?? [],
+    outputModalities: raw.architecture?.output_modalities ?? [],
   };
 }
 
@@ -53,4 +62,25 @@ export function sortModels(models: Model[]): Model[] {
     if (b.contextLength !== a.contextLength) return b.contextLength - a.contextLength;
     return a.name.localeCompare(b.name);
   });
+}
+
+export function supportsVision(model: Model): boolean {
+  return model.inputModalities.length === 0 || model.inputModalities.includes("image");
+}
+
+export function describeModalities(model: Model): string {
+  const input = model.inputModalities.length > 0 ? model.inputModalities.join(", ") : "text";
+  const output = model.outputModalities.length > 0 ? model.outputModalities.join(", ") : "text";
+  const lines = [
+    `Input: ${input}`,
+    `Output: ${output}`,
+    `Context: ${model.contextLength.toLocaleString()} tokens`,
+  ];
+  if (model.isFree) {
+    lines.push("Free");
+  } else {
+    const perMillion = (n: number) => `$${(n * 1_000_000).toFixed(2)}/M`;
+    lines.push(`${perMillion(model.promptPrice)} in · ${perMillion(model.completionPrice)} out`);
+  }
+  return lines.join("\n");
 }

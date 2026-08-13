@@ -43,6 +43,7 @@ import { useChatStream } from "./hooks/useChatStream";
 import { flattenFiles } from "./data/demoFiles";
 import type { DemoFile } from "./data/demoFiles";
 import { extractPreview } from "./utils/preview";
+import { supportsVision } from "./data/models";
 
 function updateFileContent(nodes: DemoFile[], path: string, content: string): DemoFile[] {
   return nodes.map((node) => {
@@ -118,6 +119,7 @@ export default function App() {
       ? `${selectedModel.name} — ${selectedModel.provider}`
       : parameters.selectedModelId
     : null;
+  const visionSupported = selectedModel ? supportsVision(selectedModel) : false;
 
   const sendBlockedReason = !parameters.selectedModelId
     ? "No model selected — open Parameters (Ctrl+Shift+,) to pick one."
@@ -536,12 +538,13 @@ export default function App() {
                 messages={chat.messages}
                 onSend={handleChatSend}
                 onOpenParameters={() => setParametersOpen(true)}
-                modelLabel={modelLabel}
                 streaming={chatStream.busy}
                 sendDisabled={sendBlockedReason !== null}
                 sendDisabledReason={sendBlockedReason}
                 streamError={chatStream.error}
                 onDismissStreamError={chatStream.dismissError}
+                modelLabel={modelLabel}
+                visionSupported={visionSupported}
               />
             )}
             <footer className="flex h-10 shrink-0 items-center justify-between border-t border-zinc-800 px-4 text-xs text-zinc-500">

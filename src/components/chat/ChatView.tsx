@@ -7,12 +7,13 @@ interface ChatViewProps {
   messages: ChatMessage[];
   onSend: (text: string, attachments: ChatMessage["attachments"]) => void;
   onOpenParameters: () => void;
-  modelLabel: string | null;
   streaming: boolean;
   sendDisabled: boolean;
   sendDisabledReason: string | null;
   streamError: string | null;
   onDismissStreamError: () => void;
+  modelLabel: string | null;
+  visionSupported: boolean;
 }
 
 export default function ChatView({
@@ -20,31 +21,19 @@ export default function ChatView({
   messages,
   onSend,
   onOpenParameters,
-  modelLabel,
   streaming,
   sendDisabled,
   sendDisabledReason,
   streamError,
   onDismissStreamError,
+  modelLabel,
+  visionSupported,
 }: ChatViewProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="flex h-9 shrink-0 items-center gap-2 border-b border-zinc-800 px-4">
         <span className="truncate text-xs font-medium text-zinc-300">{projectName}</span>
         <span className="ml-auto shrink-0 text-[11px] text-zinc-600">chat</span>
-        {modelLabel && (
-          <button
-            type="button"
-            onClick={onOpenParameters}
-            title="Model — open Parameters to change"
-            className="flex max-w-52 shrink-0 items-center gap-1.5 truncate rounded-sm border border-zinc-800 bg-zinc-900 px-1.5 py-0.5 text-[11px] text-zinc-400 transition-colors hover:border-sky-600 hover:text-sky-400"
-          >
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true" className="shrink-0">
-              <path d="M6 13.5 13.5 6a2.1 2.1 0 0 0-3-3L3 10.5 2 14l3.5-1ZM10 3.5 12.5 6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span className="truncate">{modelLabel}</span>
-          </button>
-        )}
       </div>
       <MessageList messages={messages} streaming={streaming} />
       {streamError && (
@@ -86,6 +75,8 @@ export default function ChatView({
         disabled={sendDisabled}
         disabledReason={sendDisabledReason}
         busy={streaming}
+        modelLabel={modelLabel}
+        visionSupported={visionSupported}
       />
     </div>
   );

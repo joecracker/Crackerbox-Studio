@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Model } from "../../data/models";
+import { describeModalities, supportsVision } from "../../data/models";
 import type { ParametersState } from "../../hooks/useParameters";
 
 function ModelPicker({
@@ -89,6 +90,7 @@ function ModelPicker({
                       onSelect(m.id);
                       setOpen(false);
                     }}
+                    title={describeModalities(m)}
                     className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-zinc-800 ${
                       m.id === selectedModelId ? "text-sky-400" : "text-zinc-200"
                     }`}
@@ -97,11 +99,18 @@ function ModelPicker({
                       <span className="font-medium">{m.name}</span>
                       <span className="ml-1.5 text-zinc-500">{m.provider}</span>
                     </span>
-                    {m.isFree && (
-                      <span className="shrink-0 rounded-sm bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
-                        Free
-                      </span>
-                    )}
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      {supportsVision(m) && (
+                        <span className="rounded-sm bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-400">
+                          vision
+                        </span>
+                      )}
+                      {m.isFree && (
+                        <span className="rounded-sm bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+                          Free
+                        </span>
+                      )}
+                    </span>
                   </button>
                 ))
               )}
