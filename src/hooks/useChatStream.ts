@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createWorkspaceFS, executeWorkspaceTool, getFile } from "../utils/workspace";
+import {
+  createWorkspaceFS,
+  executeWorkspaceTool,
+  formatDirectoryLines,
+  getFile,
+} from "../utils/workspace";
 import {
   writeWorkspaceFile,
   deleteWorkspaceFile,
   runCommandInContainer,
   installPackageInContainer,
+  listDirectoryInContainer,
+  readFileInContainer,
 } from "../utils/workspaceWebContainer";
 import { checkCommandDenylist } from "../utils/commandGuard";
 import type {
@@ -19,6 +26,7 @@ import type { WebContainer } from "@webcontainer/api";
 const CHAT_URL = "https://openrouter.ai/api/v1/chat/completions";
 const HISTORY_LIMIT = 40;
 const MAX_TOOL_ITERATIONS = 8;
+const READY_TIMEOUT_MS = 10_000;
 const TEXT_FILE_RE =
   /\.(txt|md|markdown|json|js|jsx|mjs|cjs|ts|tsx|css|html|svg|csv|yml|yaml|toml|xml|py|rs|go|java|sh|env)$/i;
 
@@ -219,6 +227,8 @@ export interface ChatStreamOptions {
   workspaceFiles: DemoFile[];
   webContainer: WebContainer | null;
   webContainerAvailable: boolean;
+  whenReady: (timeoutMs?: number) => Promise<WebContainer | null>;
+  refreshTree: () => Promise<void>;
   persistFile: (path: string, content: string) => void;
   removeFile: (path: string) => void;
   appendAssistant: () => string;
@@ -445,6 +455,8 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
         workspaceFiles,
         webContainer,
         webContainerAvailable,
+        whenReady,
+        refreshTree,
         persistFile,
         removeFile,
         appendAssistant,
@@ -479,7 +491,6 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
         ...messages.slice(-HISTORY_LIMIT).flatMap(messageToPayloadMessages),
         { role: "user", content: contentFor(text, attachments) },
       ];
-      const fs = createWorkspaceFS(workspaceFiles);
 
       let receivedText = "";
       let toolsEnabled = true;
@@ -513,6 +524,39 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
         } catch {
           return {};
         }
+      };
+
+      const readWorkspace = async (
+        name: string,
+        rawArgs: string
+      ): Promise<{ ok: true; content: string } | { ok: false; error: string }> => {
+        const container = await whenReady(READY_TIMEOUT_MS);
+        if (container) {
+          const args = parseArgs(rawArgs);
+          const path = typeof args.path === "string" ? args.path : "";
+          if (name === "list_directory") {
+            const result = await listDirectoryInContainer(container, path);
+            if (!result.ok) return result;
+            const lines = formatDirectoryLines(result.entries);
+            return { ok: true, content: lines.length > 0 ? lines.join("\n") : "(empty directory)" };
+          }
+          if (name === "read_file") {
+            return readFileInContainer(container, path);
+          }
+          return { ok: false, error: `Unknown tool: ${name}` };
+        }
+        const fs = createWorkspaceFS(workspaceFiles);
+        return executeWorkspaceTool(fs, name, rawArgs);
+      };
+
+      const readPathContent = async (path: string): Promise<string> => {
+        const container = await whenReady(READY_TIMEOUT_MS);
+        if (container) {
+          const result = await readFileInContainer(container, path);
+          return result.ok ? result.content : "";
+        }
+        const oldFile = getFile(workspaceFiles, path);
+        return oldFile && oldFile.type === "file" ? (oldFile.content ?? "") : "";
       };
 
       const pushToolResult = (callId: string, content: string) => {
@@ -665,8 +709,7 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
           const content = typeof args.content === "string" ? args.content : "";
 
           if (call.name === "write_file" || call.name === "delete_file") {
-            const oldFile = getFile(workspaceFiles, path);
-            const oldContent = oldFile && oldFile.type === "file" ? (oldFile.content ?? "") : "";
+            const oldContent = await readPathContent(path);
             patchAssistantToolCall(assistantId, call.id, {
               status: "approval",
               result: undefined,
@@ -687,27 +730,34 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
               pushToolResult(call.id, rejection);
               continue;
             }
-            if (!webContainer) {
+            const container = await whenReady(READY_TIMEOUT_MS);
+            if (!container) {
               const message = "WebContainers is unavailable — cannot apply this change.";
               patchAssistantToolCall(assistantId, call.id, { status: "error", result: message });
               pushToolResult(call.id, message);
               continue;
             }
             if (call.name === "write_file") {
-              const result = await writeWorkspaceFile(webContainer, path, content);
+              const result = await writeWorkspaceFile(container, path, content);
               const status = result.ok ? "done" : "error";
               const resultText = result.ok
                 ? `Wrote file (${result.size} bytes).`
                 : `Error: ${result.error}. Try again with a valid path.`;
               patchAssistantToolCall(assistantId, call.id, { status, result: resultText });
-              if (result.ok) persistFile(path, content);
+              if (result.ok) {
+                persistFile(path, content);
+                void refreshTree();
+              }
               pushToolResult(call.id, resultText);
             } else {
-              const result = await deleteWorkspaceFile(webContainer, path);
+              const result = await deleteWorkspaceFile(container, path);
               const status = result.ok ? "done" : "error";
               const resultText = result.ok ? "Deleted file." : `Error: ${result.error}.`;
               patchAssistantToolCall(assistantId, call.id, { status, result: resultText });
-              if (result.ok) removeFile(path);
+              if (result.ok) {
+                removeFile(path);
+                void refreshTree();
+              }
               pushToolResult(call.id, resultText);
             }
             continue;
@@ -750,7 +800,8 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
               pushToolResult(call.id, rejection);
               continue;
             }
-            if (!webContainer) {
+            const container = await whenReady(READY_TIMEOUT_MS);
+            if (!container) {
               const message = "WebContainers is unavailable — cannot run this command.";
               patchAssistantToolCall(assistantId, call.id, { status: "error", result: message });
               pushToolResult(call.id, message);
@@ -758,9 +809,9 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
             }
             const commandResult =
               call.name === "run_command"
-                ? await runCommandInContainer(webContainer, commandText)
+                ? await runCommandInContainer(container, commandText)
                 : await installPackageInContainer(
-                    webContainer,
+                    container,
                     typeof args.spec === "string" ? args.spec : ""
                   );
             const resultSummary =
@@ -773,10 +824,11 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
             const status = commandResult.ok ? "done" : "error";
             patchAssistantToolCall(assistantId, call.id, { status, result: resultText });
             pushToolResult(call.id, resultText);
+            void refreshTree();
             continue;
           }
 
-          const result = executeWorkspaceTool(fs, call.name, call.arguments);
+          const result = await readWorkspace(call.name, call.arguments);
           const contentText = result.ok ? result.content : `Error: ${result.error}`;
           patchAssistantToolCall(assistantId, call.id, {
             status: result.ok ? "done" : "error",

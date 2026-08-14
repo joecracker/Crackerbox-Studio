@@ -23,6 +23,14 @@ export interface WorkspaceFS {
 
 export type ToolExecResult = { ok: true; content: string } | { ok: false; error: string };
 
+export function formatDirectoryLines(entries: DirectoryEntry[]): string[] {
+  return entries.map((e) =>
+    e.type === "folder"
+      ? `${e.name}/`
+      : `${e.name}${e.size != null ? ` (${formatBytes(e.size)})` : ""}`
+  );
+}
+
 export function normalizePath(raw: string): NormalizedPath {
   const cleaned = (raw ?? "").replace(/\\/g, "/").trim();
   const segments = cleaned.split("/").filter((s) => s.length > 0);
@@ -108,9 +116,7 @@ export function executeWorkspaceTool(
     const path = typeof args.path === "string" ? args.path : "";
     const result = fs.listDirectory(path);
     if (!result.ok) return result;
-    const lines = result.entries.map((e) =>
-      e.type === "folder" ? `${e.name}/` : `${e.name} (${formatBytes(e.size ?? 0)})`
-    );
+    const lines = formatDirectoryLines(result.entries);
     return {
       ok: true,
       content: lines.length > 0 ? lines.join("\n") : "(empty directory)",

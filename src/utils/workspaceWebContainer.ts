@@ -1,9 +1,13 @@
-import type { WebContainer, WebContainerProcess } from "@webcontainer/api";
+import type { DirEnt, WebContainer, WebContainerProcess } from "@webcontainer/api";
 import { formatBytes, normalizePath } from "./workspace";
+import type { DirectoryEntry } from "./workspace";
+import type { DemoFile } from "../data/demoFiles";
 import { tokenizeCommand } from "./commandGuard";
 
 export type WriteWorkspaceFileResult = { ok: true; size: number } | { ok: false; error: string };
 export type DeleteWorkspaceFileResult = { ok: true } | { ok: false; error: string };
+export type ContainerListResult = { ok: true; entries: DirectoryEntry[] } | { ok: false; error: string };
+export type ContainerReadResult = { ok: true; content: string } | { ok: false; error: string };
 export interface CommandResult {
   ok: boolean;
   exitCode: number;
@@ -12,8 +16,92 @@ export interface CommandResult {
   error: string | null;
 }
 
+const MIRROR_EXCLUDED_DIRS = new Set(["node_modules", ".git", "dist", "build", ".cache"]);
+const MAX_MIRROR_FILE_BYTES = 1024 * 1024;
+
 function containerPath(path: string): string {
   return `/${path}`;
+}
+
+export async function listDirectoryInContainer(
+  container: WebContainer,
+  rawPath: string
+): Promise<ContainerListResult> {
+  const normalized = normalizePath(rawPath);
+  if (!normalized.ok) return normalized;
+  const path = containerPath(normalized.path);
+  let dirents: DirEnt<string>[];
+  try {
+    dirents = await container.fs.readdir(path, { withFileTypes: true });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "readdir failed";
+    return { ok: false, error: message };
+  }
+  const entries: DirectoryEntry[] = dirents.map((d) =>
+    d.isDirectory() ? { name: d.name, type: "folder" } : { name: d.name, type: "file" }
+  );
+  return { ok: true, entries };
+}
+
+export async function readFileInContainer(
+  container: WebContainer,
+  rawPath: string
+): Promise<ContainerReadResult> {
+  const normalized = normalizePath(rawPath);
+  if (!normalized.ok) return normalized;
+  try {
+    const content = await container.fs.readFile(containerPath(normalized.path), "utf-8");
+    return { ok: true, content };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "read failed";
+    return { ok: false, error: message };
+  }
+}
+
+function joinRel(base: string, name: string): string {
+  return base === "" ? name : `${base}/${name}`;
+}
+
+async function walkDirectory(
+  container: WebContainer,
+  absDir: string,
+  relBase: string
+): Promise<DemoFile[]> {
+  let dirents: DirEnt<string>[];
+  try {
+    dirents = await container.fs.readdir(absDir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const nodes: DemoFile[] = [];
+  for (const d of dirents) {
+    if (MIRROR_EXCLUDED_DIRS.has(d.name)) continue;
+    const abs = absDir === "/" ? `/${d.name}` : `${absDir}/${d.name}`;
+    const rel = joinRel(relBase, d.name);
+    if (d.isDirectory()) {
+      const children = await walkDirectory(container, abs, rel);
+      nodes.push({ name: d.name, type: "folder", path: rel, children });
+    } else {
+      try {
+        const bytes = await container.fs.readFile(abs);
+        if (bytes.byteLength > MAX_MIRROR_FILE_BYTES) continue;
+        const content = new TextDecoder().decode(bytes);
+        if (content.includes("\u0000")) continue;
+        nodes.push({ name: d.name, type: "file", path: rel, content });
+      } catch {
+        // unreadable / binary file — skip it in the snapshot
+      }
+    }
+  }
+  return nodes;
+}
+
+/**
+ * Read the container's filesystem back into a `DemoFile[]` snapshot suitable for the
+ * persisted mirror. Generated/binary directories are excluded so the snapshot stays small.
+ */
+export async function readTreeFromContainer(container: WebContainer): Promise<DemoFile[]> {
+  return walkDirectory(container, "/", "");
 }
 
 export async function writeWorkspaceFile(

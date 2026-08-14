@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import AppHeader from "./components/layout/AppHeader";
 import PanelResizer from "./components/layout/PanelResizer";
@@ -44,6 +44,7 @@ import { useChatStream } from "./hooks/useChatStream";
 import { useWebContainer } from "./hooks/useWebContainer";
 import { flattenFiles } from "./data/demoFiles";
 import type { DemoFile } from "./data/demoFiles";
+import { readTreeFromContainer, writeWorkspaceFile } from "./utils/workspaceWebContainer";
 import { extractPreview } from "./utils/preview";
 import { supportsVision } from "./data/models";
 
@@ -131,11 +132,27 @@ export default function App() {
     [projects]
   );
 
-  useEffect(() => {
-    if (!webContainer.ready && !webContainer.booting && webContainer.available) {
-      void webContainer.boot(activeFiles);
+  const syncFromContainer = useCallback(async () => {
+    const container = webContainer.container;
+    if (!container) return;
+    try {
+      const tree = await readTreeFromContainer(container);
+      projects.updateActiveFiles(() => tree);
+    } catch {
+      // keep the last-good mirror if the read-back fails
     }
-  }, [webContainer, activeFiles]);
+  }, [webContainer.container, projects]);
+
+  useEffect(() => {
+    const key = projects.activeProjectId;
+    if (webContainer.ready) {
+      if (webContainer.projectKey !== key) {
+        void webContainer.boot(activeFiles, key);
+      }
+    } else if (!webContainer.booting && webContainer.available) {
+      void webContainer.boot(activeFiles, key);
+    }
+  }, [webContainer, activeFiles, projects.activeProjectId]);
 
   const chatStream = useChatStream({
     activeProjectId: projects.activeProjectId,
@@ -148,6 +165,8 @@ export default function App() {
     workspaceFiles: activeFiles,
     webContainer: webContainer.container,
     webContainerAvailable: webContainer.available,
+    whenReady: (timeoutMs?: number) => webContainer.whenReady(timeoutMs),
+    refreshTree: syncFromContainer,
     persistFile,
     removeFile,
     appendAssistant: chat.appendAssistant,
@@ -248,8 +267,15 @@ export default function App() {
   const approveEdit = (id: string) => {
     const edit = edits.pending.find((e) => e.id === id);
     if (!edit) return;
-    projects.updateActiveFiles((prev) => updateFileContent(prev, edit.path, edit.newContent));
     edits.rejectEdit(id);
+    const container = webContainer.container;
+    if (container && webContainer.ready) {
+      void writeWorkspaceFile(container, edit.path, edit.newContent)
+        .then(() => syncFromContainer())
+        .catch(() => {});
+    } else {
+      projects.updateActiveFiles((prev) => updateFileContent(prev, edit.path, edit.newContent));
+    }
   };
 
   const handleSwitchProject = (id: string) => {
