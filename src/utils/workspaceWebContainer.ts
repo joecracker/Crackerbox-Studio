@@ -3,6 +3,7 @@ import { formatBytes, normalizePath } from "./workspace";
 import type { DirectoryEntry } from "./workspace";
 import type { DemoFile } from "../data/demoFiles";
 import { tokenizeCommand } from "./commandGuard";
+import { isLikelyBinaryBytes, SYNC_EXCLUDED_DIRS, SYNC_MAX_FILE_BYTES } from "./ignoreRules";
 
 export type WriteWorkspaceFileResult = { ok: true; size: number } | { ok: false; error: string };
 export type DeleteWorkspaceFileResult = { ok: true } | { ok: false; error: string };
@@ -16,8 +17,8 @@ export interface CommandResult {
   error: string | null;
 }
 
-const MIRROR_EXCLUDED_DIRS = new Set(["node_modules", ".git", "dist", "build", ".cache"]);
-const MAX_MIRROR_FILE_BYTES = 1024 * 1024;
+const MIRROR_EXCLUDED_DIRS = SYNC_EXCLUDED_DIRS;
+const MAX_MIRROR_FILE_BYTES = SYNC_MAX_FILE_BYTES;
 
 function containerPath(path: string): string {
   return `/${path}`;
@@ -85,8 +86,8 @@ async function walkDirectory(
       try {
         const bytes = await container.fs.readFile(abs);
         if (bytes.byteLength > MAX_MIRROR_FILE_BYTES) continue;
+        if (isLikelyBinaryBytes(bytes)) continue;
         const content = new TextDecoder().decode(bytes);
-        if (content.includes("\u0000")) continue;
         nodes.push({ name: d.name, type: "file", path: rel, content });
       } catch {
         // unreadable / binary file — skip it in the snapshot

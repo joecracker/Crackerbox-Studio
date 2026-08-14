@@ -50,6 +50,13 @@ import type { DemoFile } from "./data/demoFiles";
 import { readTreeFromContainer, writeWorkspaceFile } from "./utils/workspaceWebContainer";
 import { extractPreview } from "./utils/preview";
 import { supportsVision } from "./data/models";
+import { formatBytes } from "./utils/workspace";
+import {
+  importFromDataTransfer,
+  importFromDirectoryPicker,
+  importFromZipFile,
+} from "./utils/importer";
+import type { ImportResult } from "./utils/importer";
 
 function updateFileContent(nodes: DemoFile[], path: string, content: string): DemoFile[] {
   return nodes.map((node) => {
@@ -154,6 +161,7 @@ export default function App() {
 
   useEffect(() => {
     const key = projects.activeProjectId;
+    if (!projects.hydrated) return;
     if (webContainer.ready) {
       if (webContainer.projectKey !== key) {
         void webContainer.boot(activeFiles, key);
@@ -161,7 +169,7 @@ export default function App() {
     } else if (!webContainer.booting && webContainer.available) {
       void webContainer.boot(activeFiles, key);
     }
-  }, [webContainer, activeFiles, projects.activeProjectId]);
+  }, [webContainer, activeFiles, projects.activeProjectId, projects.hydrated]);
 
   const chatStream = useChatStream({
     activeProjectId: projects.activeProjectId,
@@ -195,6 +203,62 @@ export default function App() {
   const handleResetContainer = useCallback(() => {
     void webContainer.reset(activeFiles, projects.activeProjectId);
   }, [webContainer, activeFiles, projects.activeProjectId]);
+
+  const [importNotice, setImportNotice] = useState<string | null>(null);
+  const importNoticeTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(importNoticeTimer.current), []);
+
+  const showImportNotice = useCallback((message: string) => {
+    setImportNotice(message);
+    window.clearTimeout(importNoticeTimer.current);
+    importNoticeTimer.current = window.setTimeout(() => setImportNotice(null), 6000);
+  }, []);
+
+  const describeImport = useCallback((result: ImportResult): string => {
+    const name = result.name ?? "Imported Project";
+    let text = `Imported "${name}" — ${result.fileCount} file${result.fileCount === 1 ? "" : "s"} (${formatBytes(result.totalBytes)})`;
+    if (result.skipped.length > 0) {
+      text += `; skipped ${result.skipped.length}${result.exceeded ? "+" : ""} (excluded/binary/oversized)`;
+    }
+    return text;
+  }, []);
+
+  const handleImportFolder = useCallback(async () => {
+    const result = await importFromDirectoryPicker();
+    if (result.error === null && !result.ok) return; // cancelled
+    if (!result.ok) {
+      showImportNotice(result.error ?? "Folder import failed");
+      return;
+    }
+    projects.importProject(result.name ?? "Imported Project", result);
+    showImportNotice(describeImport(result));
+  }, [projects, describeImport, showImportNotice]);
+
+  const handleImportZip = useCallback(
+    async (file: File) => {
+      const result = await importFromZipFile(file);
+      if (!result.ok) {
+        showImportNotice(result.error ?? "Zip import failed");
+        return;
+      }
+      projects.importProject(result.name ?? "Imported Project", result);
+      showImportNotice(describeImport(result));
+    },
+    [projects, describeImport, showImportNotice]
+  );
+
+  const handleImportData = useCallback(
+    async (data: DataTransfer) => {
+      const result = await importFromDataTransfer(data);
+      if (!result.ok) {
+        showImportNotice(result.error ?? "Import failed");
+        return;
+      }
+      projects.importProject(result.name ?? "Imported Project", result);
+      showImportNotice(describeImport(result));
+    },
+    [projects, describeImport, showImportNotice]
+  );
   const modelSource = useModels();
 
   const selectedModel = modelSource.models.find((m) => m.id === parameters.selectedModelId);
@@ -605,6 +669,10 @@ export default function App() {
                 onNew={() => setProjectDialog({ mode: "create" })}
                 onRename={handleRenameProject}
                 onDelete={projects.deleteProject}
+                onImportFolder={handleImportFolder}
+                onImportZip={handleImportZip}
+                onImportData={handleImportData}
+                notice={importNotice}
               />
             )}
             {sidebarTab === "deploy" && (
