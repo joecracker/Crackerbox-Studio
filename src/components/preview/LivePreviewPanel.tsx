@@ -1,6 +1,7 @@
 import PanelResizer from "../layout/PanelResizer";
 import PreviewCanvas from "./PreviewCanvas";
 import { usePreviewToolbar } from "../../hooks/usePreviewToolbar";
+import type { PreviewStatus } from "../../hooks/usePreviewRuntime";
 
 interface LivePreviewPanelProps {
   width: number;
@@ -8,7 +9,38 @@ interface LivePreviewPanelProps {
   maxWidth: number;
   onResize: (width: number) => void;
   srcDoc: string | null;
+  previewUrl: string | null;
+  previewStatus: PreviewStatus;
   busy: boolean;
+}
+
+function StatusPill({ status, srcDoc }: { status: PreviewStatus; srcDoc: string | null }) {
+  if (status === "live") {
+    return (
+      <span className="rounded-sm bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+        live
+      </span>
+    );
+  }
+  if (status === "installing" || status === "starting") {
+    return (
+      <span className="rounded-sm bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-400">
+        starting…
+      </span>
+    );
+  }
+  if (status === "failed") {
+    return (
+      <span className="rounded-sm bg-red-500/15 px-1.5 py-0.5 text-[10px] font-medium text-red-400">
+        failed
+      </span>
+    );
+  }
+  return (
+    <span className="rounded-sm bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400">
+      {srcDoc ? "static" : "idle"}
+    </span>
+  );
 }
 
 export default function LivePreviewPanel({
@@ -17,6 +49,8 @@ export default function LivePreviewPanel({
   maxWidth,
   onResize,
   srcDoc,
+  previewUrl,
+  previewStatus,
   busy,
 }: LivePreviewPanelProps) {
   const toolbar = usePreviewToolbar();
@@ -53,15 +87,7 @@ export default function LivePreviewPanel({
             <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
               Live Preview
             </span>
-            {srcDoc ? (
-              <span className="rounded-sm bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
-                live
-              </span>
-            ) : (
-              <span className="rounded-sm bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400">
-                idle
-              </span>
-            )}
+            <StatusPill status={previewStatus} srcDoc={srcDoc} />
             <div className="flex-1" />
             <button
               type="button"
@@ -124,7 +150,12 @@ export default function LivePreviewPanel({
             </button>
           </div>
         </header>
-        <PreviewCanvas srcDoc={srcDoc} busy={busy} />
+        <PreviewCanvas
+          srcDoc={srcDoc}
+          previewUrl={previewUrl}
+          previewStatus={previewStatus}
+          busy={busy}
+        />
       </section>
     </>
   );

@@ -42,6 +42,7 @@ import { useChatHistory } from "./hooks/useChatHistory";
 import type { ChatAttachment } from "./hooks/useChatHistory";
 import { useChatStream } from "./hooks/useChatStream";
 import { useWebContainer } from "./hooks/useWebContainer";
+import { usePreviewRuntime } from "./hooks/usePreviewRuntime";
 import { flattenFiles } from "./data/demoFiles";
 import type { DemoFile } from "./data/demoFiles";
 import { readTreeFromContainer, writeWorkspaceFile } from "./utils/workspaceWebContainer";
@@ -118,9 +119,12 @@ export default function App() {
   const edits = useEdits();
   const parameters = useParameters();
 
+  const [mutationTick, setMutationTick] = useState(0);
+
   const persistFile = useMemo(
     () => (path: string, content: string) => {
       projects.updateActiveFiles((prev) => updateFileContent(prev, path, content));
+      setMutationTick((t) => t + 1);
     },
     [projects]
   );
@@ -128,6 +132,7 @@ export default function App() {
   const removeFile = useMemo(
     () => (path: string) => {
       projects.updateActiveFiles((prev) => removeFileNode(prev, path));
+      setMutationTick((t) => t + 1);
     },
     [projects]
   );
@@ -138,6 +143,7 @@ export default function App() {
     try {
       const tree = await readTreeFromContainer(container);
       projects.updateActiveFiles(() => tree);
+      setMutationTick((t) => t + 1);
     } catch {
       // keep the last-good mirror if the read-back fails
     }
@@ -174,6 +180,13 @@ export default function App() {
     removeAssistant: chat.removeAssistant,
     setAssistantToolCalls: chat.setAssistantToolCalls,
     patchAssistantToolCall: chat.patchAssistantToolCall,
+  });
+  const previewRuntime = usePreviewRuntime({
+    container: webContainer.container,
+    ready: webContainer.ready,
+    available: webContainer.available,
+    projectKey: webContainer.projectKey,
+    mutationTick,
   });
   const modelSource = useModels();
 
@@ -659,6 +672,8 @@ export default function App() {
               maxWidth={previewMaxWidth()}
               onResize={setPreviewWidth}
               srcDoc={previewDoc}
+              previewUrl={previewRuntime.url}
+              previewStatus={previewRuntime.status}
               busy={chatStream.busy}
             />
           )}
