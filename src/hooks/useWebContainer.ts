@@ -21,6 +21,11 @@ export interface WebContainerController {
    * Returns the usable instance, or `null` when it can't be used — never throws.
    */
   whenReady: (timeoutMs?: number) => Promise<WebContainer | null>;
+  /**
+   * Hard reset: tears down the current instance (killing all of its processes) and boots a
+   * fresh one with the given tree. Recovery path for a wedged dev server / blank preview.
+   */
+  reset: (files: DemoFile[], token?: string) => Promise<WebContainer | null>;
 }
 
 const DEFAULT_READY_TIMEOUT_MS = 10_000;
@@ -99,6 +104,25 @@ export function useWebContainer(): WebContainerController {
     }
   }, []);
 
+  const reset = useCallback(
+    async (files: DemoFile[], token = ""): Promise<WebContainer | null> => {
+      const previous = containerRef.current;
+      if (previous) {
+        containerRef.current = null;
+        projectKeyRef.current = null;
+        setContainer(null);
+        setReady(false);
+        try {
+          previous.teardown();
+        } catch {
+          // already torn down
+        }
+      }
+      return boot(files, token);
+    },
+    [boot]
+  );
+
   const whenReady = useCallback(
     async (timeoutMs: number = DEFAULT_READY_TIMEOUT_MS): Promise<WebContainer | null> => {
       const current = containerRef.current;
@@ -129,5 +153,6 @@ export function useWebContainer(): WebContainerController {
     projectKey: projectKeyRef.current,
     boot,
     whenReady,
+    reset,
   };
 }

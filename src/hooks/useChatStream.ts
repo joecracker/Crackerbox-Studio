@@ -14,6 +14,8 @@ import {
   readFileInContainer,
 } from "../utils/workspaceWebContainer";
 import { checkCommandDenylist } from "../utils/commandGuard";
+import { buildFileIndex, isExplicitlyRequested } from "../utils/approvalPolicy";
+import type { GuardrailMode } from "../utils/approvalPolicy";
 import type {
   ChatToolCall,
   ChatAttachment,
@@ -116,9 +118,10 @@ const WRITE_TOOLS: ToolDefinition[] = [
     function: {
       name: "write_file",
       description:
-        "Write a text file to the active project workspace. Requires the user's approval — " +
-        "the full new file content is shown as a diff before it is applied. Provide the " +
-        "complete new file contents.",
+        "Write a text file to the active project workspace. If the user explicitly asked for " +
+        "this file to be changed in their message, it is applied immediately (the diff is " +
+        "shown in the chat). Otherwise the user's approval is requested — the full new file " +
+        "content is shown as a diff before it is applied. Provide the complete new file contents.",
       parameters: {
         type: "object",
         properties: {
@@ -227,6 +230,7 @@ export interface ChatStreamOptions {
   workspaceFiles: DemoFile[];
   webContainer: WebContainer | null;
   webContainerAvailable: boolean;
+  guardrailMode: GuardrailMode;
   whenReady: (timeoutMs?: number) => Promise<WebContainer | null>;
   refreshTree: () => Promise<void>;
   persistFile: (path: string, content: string) => void;
@@ -455,6 +459,7 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
         workspaceFiles,
         webContainer,
         webContainerAvailable,
+        guardrailMode,
         whenReady,
         refreshTree,
         persistFile,
@@ -491,6 +496,8 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
         ...messages.slice(-HISTORY_LIMIT).flatMap(messageToPayloadMessages),
         { role: "user", content: contentFor(text, attachments) },
       ];
+
+      const fileIndex = buildFileIndex(workspaceFiles);
 
       let receivedText = "";
       let toolsEnabled = true;
@@ -710,20 +717,28 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
 
           if (call.name === "write_file" || call.name === "delete_file") {
             const oldContent = await readPathContent(path);
+            const autoApproved =
+              call.name === "write_file" &&
+              guardrailMode === "tiered" &&
+              isExplicitlyRequested(path, text, fileIndex);
             patchAssistantToolCall(assistantId, call.id, {
-              status: "approval",
+              status: autoApproved ? "running" : "approval",
               result: undefined,
               oldContent,
-            });
-            const approved = await requestApproval({
-              callId: call.id,
-              name: call.name,
-              path,
-              content,
-              oldContent,
               newContent: call.name === "delete_file" ? "" : content,
-              rationale: turnText,
+              autoApproved,
             });
+            const approved =
+              autoApproved ||
+              (await requestApproval({
+                callId: call.id,
+                name: call.name,
+                path,
+                content,
+                oldContent,
+                newContent: call.name === "delete_file" ? "" : content,
+                rationale: turnText,
+              }));
             if (!approved) {
               const rejection = "User rejected this action. Please adjust your approach and propose an alternative.";
               patchAssistantToolCall(assistantId, call.id, { status: "rejected", result: rejection });

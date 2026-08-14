@@ -1,5 +1,18 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import type { ChatMessage, ChatToolCall } from "../../hooks/useChatHistory";
+import { diffLines, diffStat } from "../../utils/diff";
+
+const ROW_CLASSES: Record<string, string> = {
+  eq: "text-zinc-400",
+  add: "bg-emerald-500/15 text-emerald-300",
+  del: "bg-red-500/15 text-red-300",
+};
+
+const MARKER_CLASSES: Record<string, string> = {
+  eq: "text-zinc-600",
+  add: "text-emerald-400",
+  del: "text-red-400",
+};
 
 function formatTime(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -73,11 +86,50 @@ function toolSummary(call: ChatToolCall): string {
   return "";
 }
 
+function ToolDiff({ call }: { call: ChatToolCall }) {
+  const lines = useMemo(
+    () => diffLines(call.oldContent ?? "", call.newContent ?? ""),
+    [call.oldContent, call.newContent]
+  );
+  const { added, removed } = useMemo(() => diffStat(lines), [lines]);
+  return (
+    <div className="mt-1.5 overflow-hidden rounded-md border border-zinc-800">
+      <div className="flex items-center gap-2 border-b border-zinc-800 bg-zinc-900/60 px-2 py-1">
+        <code className="min-w-0 flex-1 truncate font-mono text-[10px] text-zinc-400">
+          {call.oldContent === "" ? "new file" : "diff"}
+        </code>
+        <span className="shrink-0 text-[10px] tabular-nums text-emerald-400">+{added}</span>
+        <span className="shrink-0 text-[10px] tabular-nums text-red-400">-{removed}</span>
+      </div>
+      <div className="max-h-48 overflow-y-auto px-2 py-1.5">
+        <code className="block w-max min-w-full font-mono text-[11px] leading-relaxed">
+          {lines.map((line, i) => (
+            <span key={i} className={`flex ${ROW_CLASSES[line.type]}`}>
+              <span className={`w-4 shrink-0 select-none text-center ${MARKER_CLASSES[line.type]}`}>
+                {line.type === "add" ? "+" : line.type === "del" ? "-" : " "}
+              </span>
+              <span className="w-7 shrink-0 select-none pr-1 text-right text-zinc-600">
+                {line.oldNo ?? ""}
+              </span>
+              <span className="w-7 shrink-0 select-none pr-1 text-right text-zinc-600">
+                {line.newNo ?? ""}
+              </span>
+              <span className="whitespace-pre px-1">{line.text}</span>
+            </span>
+          ))}
+        </code>
+      </div>
+    </div>
+  );
+}
+
 function ToolActivity({ call }: { call: ChatToolCall }) {
   const path = toolArgsPath(call.arguments);
   const summary = toolSummary(call);
+  const showDiff = (call.name === "write_file" || call.name === "delete_file") && call.oldContent !== undefined;
   return (
-    <div className="mt-1 flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-950/70 px-2 py-1.5">
+    <div>
+      <div className="mt-1 flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-950/70 px-2 py-1.5">
       <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
         {call.status === "done" && (
           <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true" className="text-emerald-400">
@@ -138,6 +190,13 @@ function ToolActivity({ call }: { call: ChatToolCall }) {
                 : summary}
         </span>
       )}
+      {call.autoApproved && (
+        <span className="ml-auto shrink-0 rounded bg-emerald-500/15 px-1.5 py-px text-[10px] font-medium uppercase tracking-wider text-emerald-300">
+          auto
+        </span>
+      )}
+      </div>
+      {showDiff && <ToolDiff call={call} />}
     </div>
   );
 }

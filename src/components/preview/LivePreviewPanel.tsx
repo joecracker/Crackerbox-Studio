@@ -11,7 +11,9 @@ interface LivePreviewPanelProps {
   srcDoc: string | null;
   previewUrl: string | null;
   previewStatus: PreviewStatus;
+  liveEpoch?: number;
   busy: boolean;
+  onRestart?: () => void;
 }
 
 function StatusPill({ status, srcDoc }: { status: PreviewStatus; srcDoc: string | null }) {
@@ -51,7 +53,9 @@ export default function LivePreviewPanel({
   srcDoc,
   previewUrl,
   previewStatus,
+  liveEpoch,
   busy,
+  onRestart,
 }: LivePreviewPanelProps) {
   const toolbar = usePreviewToolbar();
   const show = toolbar.visible;
@@ -154,7 +158,9 @@ export default function LivePreviewPanel({
           srcDoc={srcDoc}
           previewUrl={previewUrl}
           previewStatus={previewStatus}
+          liveEpoch={liveEpoch}
           busy={busy}
+          onRestart={onRestart}
         />
       </section>
     </>

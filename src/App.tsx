@@ -10,6 +10,7 @@ import ProjectLibrary from "./components/projects/ProjectLibrary";
 import ProjectNameDialog from "./components/projects/ProjectNameDialog";
 import DeployWizard from "./components/deploy/DeployWizard";
 import PersonalitySettings from "./components/settings/PersonalitySettings";
+import GuardrailSettings from "./components/settings/GuardrailSettings";
 import ChatView from "./components/chat/ChatView";
 import TerminalPanel from "./components/terminal/TerminalPanel";
 import ParametersDialog from "./components/parameters/ParametersDialog";
@@ -38,6 +39,7 @@ import { useEdits } from "./hooks/useEdits";
 import { useProjects } from "./hooks/useProjects";
 import { useTokenVault } from "./hooks/useTokenVault";
 import { usePersonality } from "./hooks/usePersonality";
+import { useGuardrails } from "./hooks/useGuardrails";
 import { useChatHistory } from "./hooks/useChatHistory";
 import type { ChatAttachment } from "./hooks/useChatHistory";
 import { useChatStream } from "./hooks/useChatStream";
@@ -112,6 +114,7 @@ export default function App() {
   const projects = useProjects();
   const vault = useTokenVault();
   const personality = usePersonality();
+  const guardrails = useGuardrails();
   const webContainer = useWebContainer();
   const chat = useChatHistory(projects.activeProjectId);
   const activeFiles = projects.activeProject.files;
@@ -171,6 +174,7 @@ export default function App() {
     workspaceFiles: activeFiles,
     webContainer: webContainer.container,
     webContainerAvailable: webContainer.available,
+    guardrailMode: guardrails.mode,
     whenReady: (timeoutMs?: number) => webContainer.whenReady(timeoutMs),
     refreshTree: syncFromContainer,
     persistFile,
@@ -188,6 +192,9 @@ export default function App() {
     projectKey: webContainer.projectKey,
     mutationTick,
   });
+  const handleResetContainer = useCallback(() => {
+    void webContainer.reset(activeFiles, projects.activeProjectId);
+  }, [webContainer, activeFiles, projects.activeProjectId]);
   const modelSource = useModels();
 
   const selectedModel = modelSource.models.find((m) => m.id === parameters.selectedModelId);
@@ -608,10 +615,15 @@ export default function App() {
               />
             )}
             {sidebarTab === "settings" && (
-              <PersonalitySettings
-                personality={personality}
-                baseSystemPrompt={parameters.systemPrompt}
-              />
+              <>
+                <PersonalitySettings
+                  personality={personality}
+                  baseSystemPrompt={parameters.systemPrompt}
+                />
+                <div className="px-3 pb-4">
+                  <GuardrailSettings guardrails={guardrails} />
+                </div>
+              </>
             )}
           </Sidebar>
           {!sidebarCollapsed && (
@@ -674,7 +686,9 @@ export default function App() {
               srcDoc={previewDoc}
               previewUrl={previewRuntime.url}
               previewStatus={previewRuntime.status}
+              liveEpoch={previewRuntime.liveEpoch}
               busy={chatStream.busy}
+              onRestart={handleResetContainer}
             />
           )}
         </div>

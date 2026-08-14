@@ -52,6 +52,21 @@ const DENY_PATTERNS: { test: RegExp; reason: string }[] = [
     test: /\bchown\s+(-R\s+)?[^\s]+\s+(\/|\/\*|~)/i,
     reason: "changing ownership on the filesystem root is not allowed",
   },
+  {
+    test: /^npm\s+run\s+(dev|start|serve|preview)\b/i,
+    reason:
+      "the live preview pane already runs the project's dev server — use the preview's restart button instead",
+  },
+  {
+    test: /^npm\s+start\b/i,
+    reason:
+      "the live preview pane already runs the project's dev server — use the preview's restart button instead",
+  },
+  {
+    test: /^(npx\s+)?vite(\s+|$)/i,
+    reason:
+      "the live preview pane already runs the project's dev server — use the preview's restart button instead",
+  },
 ];
 
 export function checkCommandDenylist(command: string): DenyCheckResult {

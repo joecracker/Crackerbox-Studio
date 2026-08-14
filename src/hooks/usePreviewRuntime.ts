@@ -19,9 +19,17 @@ interface PreviewRuntimeState {
   status: PreviewStatus;
   url: string | null;
   error: string | null;
+  /**
+   * Bumped every time the preview transitions into (or changes) a live server. The iframe
+   * keys off this so it always remounts — even when a fresh container restarts the dev
+   * server on the same port/URL, which React would otherwise not reload.
+   */
+  liveEpoch: number;
 }
 
 const INSTALL_TIMEOUT_MS = 180_000;
+const RESTART_DELAY_MS = 800;
+const MAX_RESTART_ATTEMPTS = 3;
 
 function drain(proc: WebContainerProcess): void {
   const reader = proc.output.getReader();
@@ -93,11 +101,21 @@ export function usePreviewRuntime({
   const [status, setStatus] = useState<PreviewStatus>("static");
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [liveEpoch, setLiveEpoch] = useState(0);
   const procRef = useRef<WebContainerProcess | null>(null);
   const containerRef = useRef<WebContainer | null>(null);
   const projectKeyRef = useRef<string | null>(null);
   const startingRef = useRef(false);
   const subsRef = useRef<Array<() => void>>([]);
+  const restartAttemptsRef = useRef(0);
+  const statusRef = useRef<PreviewStatus>("static");
+  const urlRef = useRef<string | null>(null);
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+  useEffect(() => {
+    urlRef.current = url;
+  }, [url]);
 
   const cleanup = useCallback(() => {
     startingRef.current = false;
@@ -131,8 +149,12 @@ export function usePreviewRuntime({
       subsRef.current = subs;
       subs.push(
         wc.on("server-ready", (_port, serverUrl) => {
+          const changed = statusRef.current !== "live" || urlRef.current !== serverUrl;
+          restartAttemptsRef.current = 0;
           setUrl(serverUrl);
           setStatus("live");
+          setError(null);
+          if (changed) setLiveEpoch((e) => e + 1);
         })
       );
       subs.push(
@@ -158,8 +180,21 @@ export function usePreviewRuntime({
         void proc.exit.then((code) => {
           if (procRef.current !== proc) return;
           procRef.current = null;
-          setStatus("failed");
-          setError(`Dev server exited unexpectedly (exit code ${code}).`);
+          setUrl(null);
+          if (restartAttemptsRef.current >= MAX_RESTART_ATTEMPTS) {
+            setStatus("failed");
+            setError(`Dev server exited unexpectedly (exit code ${code}).`);
+            return;
+          }
+          restartAttemptsRef.current += 1;
+          setStatus("starting");
+          setError(`Dev server exited (${code}) — restarting…`);
+          setTimeout(() => {
+            const wcRef = containerRef.current;
+            const keyRef = projectKeyRef.current;
+            if (!wcRef) return;
+            void startDevServer(wcRef, keyRef ?? "");
+          }, RESTART_DELAY_MS);
         });
       } catch (e) {
         const message = e instanceof Error ? e.message : "Failed to start the dev server";
@@ -198,5 +233,5 @@ export function usePreviewRuntime({
     void startDevServer(wc, projectKey ?? "");
   }, [mutationTick, container, ready, available, projectKey, startDevServer]);
 
-  return { status, url, error };
+  return { status, url, error, liveEpoch };
 }

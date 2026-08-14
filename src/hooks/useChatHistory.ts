@@ -16,9 +16,13 @@ export interface ChatToolCall {
   status: "running" | "done" | "error" | "approval" | "rejected" | "blocked";
   result?: string;
   oldContent?: string;
+  newContent?: string;
+  autoApproved?: boolean;
 }
 
-export type ChatToolCallPartial = Partial<Pick<ChatToolCall, "status" | "result" | "oldContent">>;
+export type ChatToolCallPartial = Partial<
+  Pick<ChatToolCall, "status" | "result" | "oldContent" | "newContent" | "autoApproved">
+>;
 
 export interface ChatMessage {
   id: string;
@@ -104,7 +108,7 @@ export function useChatHistory(activeProjectId: string) {
   );
 
   const patchAssistantToolCall = useCallback(
-    (id: string, callId: string, patch: Partial<Pick<ChatToolCall, "status" | "result">>) => {
+    (id: string, callId: string, patch: ChatToolCallPartial) => {
       updateProject((list) =>
         list.map((m) =>
           m.id === id && m.role === "assistant"
