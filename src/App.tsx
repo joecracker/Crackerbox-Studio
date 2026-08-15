@@ -43,8 +43,10 @@ import { useGuardrails } from "./hooks/useGuardrails";
 import { useChatHistory } from "./hooks/useChatHistory";
 import type { ChatAttachment } from "./hooks/useChatHistory";
 import { useChatStream } from "./hooks/useChatStream";
+import type { PendingApproval } from "./hooks/useChatStream";
 import { useWebContainer } from "./hooks/useWebContainer";
 import { usePreviewRuntime } from "./hooks/usePreviewRuntime";
+import type { PreviewApprovalRequest } from "./hooks/usePreviewRuntime";
 import { flattenFiles } from "./data/demoFiles";
 import type { DemoFile } from "./data/demoFiles";
 import { readTreeFromContainer, writeWorkspaceFile } from "./utils/workspaceWebContainer";
@@ -130,6 +132,8 @@ export default function App() {
   const parameters = useParameters();
 
   const [mutationTick, setMutationTick] = useState(0);
+  const [previewApproval, setPreviewApproval] = useState<PendingApproval | null>(null);
+  const previewApprovalResolverRef = useRef<((approved: boolean) => void) | null>(null);
 
   const persistFile = useMemo(
     () => (path: string, content: string) => {
@@ -193,12 +197,47 @@ export default function App() {
     setAssistantToolCalls: chat.setAssistantToolCalls,
     patchAssistantToolCall: chat.patchAssistantToolCall,
   });
+  const requestPreviewApproval = useCallback(
+    (pending: PreviewApprovalRequest): Promise<boolean> =>
+      new Promise<boolean>((resolve) => {
+        previewApprovalResolverRef.current = resolve;
+        setPreviewApproval({
+          callId: `preview-start-${pending.projectKey}`,
+          name: "preview_start",
+          path: "",
+          content: "",
+          oldContent: "",
+          newContent: "",
+          rationale:
+            "This project's dev server has never been started on this device. Approving will run " +
+            "npm install and npm run dev inside the sandboxed container so the live preview can render.",
+          command: pending.command,
+        });
+      }),
+    []
+  );
+
+  const handlePreviewApprove = useCallback(() => {
+    const resolve = previewApprovalResolverRef.current;
+    previewApprovalResolverRef.current = null;
+    setPreviewApproval(null);
+    resolve?.(true);
+  }, []);
+
+  const handlePreviewReject = useCallback(() => {
+    const resolve = previewApprovalResolverRef.current;
+    previewApprovalResolverRef.current = null;
+    setPreviewApproval(null);
+    resolve?.(false);
+  }, []);
+
   const previewRuntime = usePreviewRuntime({
     container: webContainer.container,
     ready: webContainer.ready,
     available: webContainer.available,
     projectKey: webContainer.projectKey,
     mutationTick,
+    requestApproval: requestPreviewApproval,
   });
   const handleResetContainer = useCallback(() => {
     void webContainer.reset(activeFiles, projects.activeProjectId);
@@ -603,6 +642,9 @@ export default function App() {
       fileTree.deselectFile();
       fileTree.setQuery("");
       setSidebarTab("chat");
+      previewApprovalResolverRef.current?.(false);
+      previewApprovalResolverRef.current = null;
+      setPreviewApproval(null);
       if (fileTreeCollapsed) handleToggleFileTree();
     }
   }, [projects.activeProjectId, edits, fileTree, fileTreeCollapsed, handleToggleFileTree]);
@@ -757,6 +799,9 @@ export default function App() {
               liveEpoch={previewRuntime.liveEpoch}
               busy={chatStream.busy}
               onRestart={handleResetContainer}
+              approval={previewApproval}
+              onApprove={handlePreviewApprove}
+              onReject={handlePreviewReject}
             />
           )}
         </div>

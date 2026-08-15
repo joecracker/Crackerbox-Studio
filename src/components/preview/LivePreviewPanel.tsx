@@ -1,7 +1,9 @@
 import PanelResizer from "../layout/PanelResizer";
 import PreviewCanvas from "./PreviewCanvas";
+import ApprovalCard from "../chat/ApprovalCard";
 import { usePreviewToolbar } from "../../hooks/usePreviewToolbar";
 import type { PreviewStatus } from "../../hooks/usePreviewRuntime";
+import type { PendingApproval } from "../../hooks/useChatStream";
 
 interface LivePreviewPanelProps {
   width: number;
@@ -14,6 +16,9 @@ interface LivePreviewPanelProps {
   liveEpoch?: number;
   busy: boolean;
   onRestart?: () => void;
+  approval?: PendingApproval | null;
+  onApprove?: () => void;
+  onReject?: () => void;
 }
 
 function StatusPill({ status, srcDoc }: { status: PreviewStatus; srcDoc: string | null }) {
@@ -56,6 +61,9 @@ export default function LivePreviewPanel({
   liveEpoch,
   busy,
   onRestart,
+  approval,
+  onApprove,
+  onReject,
 }: LivePreviewPanelProps) {
   const toolbar = usePreviewToolbar();
   const show = toolbar.visible;
@@ -72,7 +80,7 @@ export default function LivePreviewPanel({
       />
       <section
         aria-label="Live preview"
-        className="flex min-w-0 flex-col border-l border-zinc-800 bg-zinc-950"
+        className="relative flex min-w-0 flex-col border-l border-zinc-800 bg-zinc-950"
         style={{ width }}
         onPointerEnter={toolbar.handlePointerEnter}
         onPointerMove={toolbar.handlePointerEnter}
@@ -162,6 +170,13 @@ export default function LivePreviewPanel({
           busy={busy}
           onRestart={onRestart}
         />
+        {approval && onApprove && onReject && (
+          <div className="absolute inset-x-0 top-9 z-30 flex justify-center px-4">
+            <div className="w-full max-w-md">
+              <ApprovalCard approval={approval} onApprove={onApprove} onReject={onReject} />
+            </div>
+          </div>
+        )}
       </section>
     </>
   );

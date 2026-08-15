@@ -41,6 +41,7 @@ export function useTokenVault(): TokenVault {
   const [passphrase, setPassphrase] = useState<string | null>(() =>
     hasAnyToken(trusted) ? TRUSTED_SENTINEL : null
   );
+  const [trustSession, setTrustSession] = useState<boolean>(() => hasAnyToken(trusted));
   const [tokens, setTokens] = useState<TokenMap>(trusted);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +59,7 @@ export function useTokenVault(): TokenVault {
       if (vault.openrouter) result.openrouter = await decryptToken(phrase, vault.openrouter);
       setPassphrase(phrase);
       setTokens(result);
+      setTrustSession(trustThisDevice);
       if (trustThisDevice) {
         setTrusted((prev) => ({ ...prev, ...result }));
       }
@@ -72,18 +74,19 @@ export function useTokenVault(): TokenVault {
     setPassphrase(null);
     setTokens({});
     setTrusted({});
+    setTrustSession(false);
     setError(null);
   };
 
   const saveToken = async (service: TokenService, token: string) => {
     if (!passphrase) throw new Error("Unlock the vault first");
-    const isTrusted = passphrase === TRUSTED_SENTINEL;
-    if (!isTrusted) {
+    setTokens((prev) => ({ ...prev, [service]: token }));
+    if (trustSession) {
+      setTrusted((prev) => ({ ...prev, [service]: token }));
+    } else {
       const payload = await encryptToken(passphrase, token);
       setVault((prev) => ({ ...prev, [service]: payload }));
     }
-    setTokens((prev) => ({ ...prev, [service]: token }));
-    setTrusted((prev) => ({ ...prev, [service]: token }));
     setError(null);
   };
 

@@ -26,6 +26,7 @@ const BADGE_STYLES: Record<PendingApproval["name"], string> = {
   delete_file: "bg-red-500/15 text-red-300",
   run_command: "bg-amber-500/15 text-amber-300",
   install_package: "bg-cyan-500/15 text-cyan-300",
+  preview_start: "bg-violet-500/15 text-violet-300",
 };
 
 const BADGE_LABELS: Record<PendingApproval["name"], string> = {
@@ -33,6 +34,7 @@ const BADGE_LABELS: Record<PendingApproval["name"], string> = {
   delete_file: "Delete",
   run_command: "Run",
   install_package: "Install",
+  preview_start: "Preview",
 };
 
 function ApprovalDiff({ added, removed }: { added: number; removed: number }) {

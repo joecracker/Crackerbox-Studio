@@ -3,6 +3,11 @@ import type { WebContainer, WebContainerProcess } from "@webcontainer/api";
 
 export type PreviewStatus = "static" | "installing" | "starting" | "live" | "failed";
 
+export interface PreviewApprovalRequest {
+  projectKey: string;
+  command: string;
+}
+
 interface UsePreviewRuntimeOptions {
   container: WebContainer | null;
   ready: boolean;
@@ -13,6 +18,27 @@ interface UsePreviewRuntimeOptions {
    * server once a previously non-runnable project gains a dev script.
    */
   mutationTick?: number;
+  /**
+   * Called before the first `npm install` / `npm run dev` for a project runs. Resolves
+   * `true` to proceed (the project key is remembered so later runs skip the prompt) or
+   * `false` to stay on the static preview. When omitted, auto-start proceeds without a
+   * prompt (previous behavior).
+   */
+  requestApproval?: (pending: PreviewApprovalRequest) => Promise<boolean>;
+}
+
+const PREVIEW_APPROVED_KEY = "crackerbox.preview.approved";
+
+function loadApprovedKeys(): Set<string> {
+  try {
+    const raw = localStorage.getItem(PREVIEW_APPROVED_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return new Set(
+      Array.isArray(parsed) ? parsed.filter((k): k is string => typeof k === "string") : []
+    );
+  } catch {
+    return new Set();
+  }
 }
 
 interface PreviewRuntimeState {
@@ -97,6 +123,7 @@ export function usePreviewRuntime({
   available,
   projectKey,
   mutationTick = 0,
+  requestApproval,
 }: UsePreviewRuntimeOptions): PreviewRuntimeState {
   const [status, setStatus] = useState<PreviewStatus>("static");
   const [url, setUrl] = useState<string | null>(null);
@@ -108,6 +135,8 @@ export function usePreviewRuntime({
   const startingRef = useRef(false);
   const subsRef = useRef<Array<() => void>>([]);
   const restartAttemptsRef = useRef(0);
+  const approvedKeysRef = useRef<Set<string> | null>(null);
+  const deniedKeysRef = useRef<Set<string>>(new Set());
   const statusRef = useRef<PreviewStatus>("static");
   const urlRef = useRef<string | null>(null);
   useEffect(() => {
@@ -138,6 +167,21 @@ export function usePreviewRuntime({
     subsRef.current = [];
   }, []);
 
+  const isApprovedKey = (key: string): boolean => {
+    if (approvedKeysRef.current === null) approvedKeysRef.current = loadApprovedKeys();
+    return approvedKeysRef.current.has(key);
+  };
+
+  const rememberApprovedKey = (key: string): void => {
+    const set = approvedKeysRef.current ?? (approvedKeysRef.current = loadApprovedKeys());
+    set.add(key);
+    try {
+      localStorage.setItem(PREVIEW_APPROVED_KEY, JSON.stringify([...set]));
+    } catch {
+      // ignore storage failures — the key stays approved for this session
+    }
+  };
+
   const startDevServer = useCallback(
     async (wc: WebContainer, key: string) => {
       if (startingRef.current || procRef.current) return;
@@ -166,6 +210,18 @@ export function usePreviewRuntime({
         if (!(await hasDevScript(wc))) {
           setStatus("static");
           return;
+        }
+        if (!isApprovedKey(key) && !deniedKeysRef.current.has(key)) {
+          const approved = requestApproval
+            ? await requestApproval({ projectKey: key, command: "npm install && npm run dev" })
+            : true;
+          if (!approved) {
+            deniedKeysRef.current.add(key);
+            setStatus("static");
+            setError(null);
+            return;
+          }
+          rememberApprovedKey(key);
         }
         if (!(await hasNodeModules(wc))) {
           setStatus("installing");
@@ -205,7 +261,7 @@ export function usePreviewRuntime({
         startingRef.current = false;
       }
     },
-    [cleanup]
+    [cleanup, requestApproval]
   );
 
   useEffect(() => {

@@ -253,7 +253,7 @@ export interface ChatStreamResult {
 
 export interface PendingApproval {
   callId: string;
-  name: "write_file" | "delete_file" | "run_command" | "install_package";
+  name: "write_file" | "delete_file" | "run_command" | "install_package" | "preview_start";
   path: string;
   content: string;
   oldContent: string;
