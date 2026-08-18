@@ -13,6 +13,15 @@ interface ProjectLibraryProps {
   onImportZip: (file: File) => void;
   onImportData: (data: DataTransfer) => void;
   notice: string | null;
+  driveConfigured: boolean;
+  driveConnected: boolean;
+  driveBusy: boolean;
+  driveStatus: string | null;
+  onDriveConnect: () => void;
+  onDriveSave: () => void;
+  onDriveRestore: () => void;
+  onExportJSON: () => void;
+  onImportJSONFile: (file: File) => void;
 }
 
 export default function ProjectLibrary({
@@ -26,10 +35,20 @@ export default function ProjectLibrary({
   onImportZip,
   onImportData,
   notice,
+  driveConfigured,
+  driveConnected,
+  driveBusy,
+  driveStatus,
+  onDriveConnect,
+  onDriveSave,
+  onDriveRestore,
+  onExportJSON,
+  onImportJSONFile,
 }: ProjectLibraryProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const zipInputRef = useRef<HTMLInputElement>(null);
+  const jsonInputRef = useRef<HTMLInputElement>(null);
 
   const triggerFolder = () => {
     setMenuOpen(false);
@@ -206,6 +225,80 @@ export default function ProjectLibrary({
           Drag a project folder or .zip here to import it. node_modules, .git, build artifacts, and
           binary files are skipped.
         </p>
+
+        <div className="mt-3 border-t border-zinc-800 pt-2.5">
+          <span className="block px-1 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+            Cloud Backup
+          </span>
+          <input
+            ref={jsonInputRef}
+            type="file"
+            accept=".json"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onImportJSONFile(file);
+              e.target.value = "";
+            }}
+            aria-hidden="true"
+            tabIndex={-1}
+          />
+          <div className="flex flex-col gap-1">
+            {driveConfigured ? (
+              driveConnected ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={driveBusy}
+                    onClick={onDriveSave}
+                    className="rounded-md bg-sky-500/15 px-2.5 py-1.5 text-left text-xs text-sky-300 transition-colors hover:bg-sky-500/25 disabled:opacity-50"
+                  >
+                    Save all projects to Google Drive
+                  </button>
+                  <button
+                    type="button"
+                    disabled={driveBusy}
+                    onClick={onDriveRestore}
+                    className="rounded-md bg-zinc-800 px-2.5 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-700 disabled:opacity-50"
+                  >
+                    Restore all projects from Drive
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  disabled={driveBusy}
+                  onClick={onDriveConnect}
+                  className="rounded-md bg-sky-500/15 px-2.5 py-1.5 text-left text-xs text-sky-300 transition-colors hover:bg-sky-500/25 disabled:opacity-50"
+                >
+                  Connect Google Drive
+                </button>
+              )
+            ) : (
+              <span className="px-1 text-[10px] leading-relaxed text-zinc-600">
+                Drive backup isn't configured yet (missing Client ID) — see GOOGLE_DRIVE_SETUP.md. JSON
+                export/import below still works.
+              </span>
+            )}
+            <div className="mt-1 flex gap-1">
+              <button
+                type="button"
+                onClick={onExportJSON}
+                className="flex-1 rounded-md bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-300 transition-colors hover:bg-zinc-700"
+              >
+                Export JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => jsonInputRef.current?.click()}
+                className="flex-1 rounded-md bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-300 transition-colors hover:bg-zinc-700"
+              >
+                Import JSON
+              </button>
+            </div>
+          </div>
+          {driveStatus && <p className="mt-1.5 px-1 text-[10px] text-zinc-500">{driveStatus}</p>}
+        </div>
       </div>
     </div>
   );

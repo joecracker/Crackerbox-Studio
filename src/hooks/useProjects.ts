@@ -244,6 +244,33 @@ export function useProjects() {
     [setMeta]
   );
 
+  /**
+   * Wholesale-replaces every project (metadata + files) — used by the Google
+   * Drive / JSON backup restore flow. Preserves the original project ids so
+   * repeated restores don't pile up duplicates.
+   */
+  const restoreAll = useCallback(
+    async (data: { projects: Project[]; activeProjectId?: string }) => {
+      if (!Array.isArray(data.projects) || data.projects.length === 0) return;
+      const nextFilesMap: Record<string, DemoFile[]> = {};
+      for (const p of data.projects) {
+        const files = Array.isArray(p.files) ? p.files : [];
+        nextFilesMap[p.id] = files;
+        await idbSaveProjectFiles(p.id, files);
+      }
+      const nextMeta: ProjectsState = {
+        projects: data.projects.map(({ id, name, origin }) => ({ id, name, origin })),
+        activeProjectId:
+          data.activeProjectId && data.projects.some((p) => p.id === data.activeProjectId)
+            ? data.activeProjectId
+            : data.projects[0].id,
+      };
+      setMeta(nextMeta);
+      setFilesMap(nextFilesMap);
+    },
+    [setMeta]
+  );
+
   return {
     projects,
     activeProjectId,
@@ -255,5 +282,6 @@ export function useProjects() {
     switchProject,
     updateActiveFiles,
     importProject,
+    restoreAll,
   };
 }

@@ -37,6 +37,14 @@ import { useFileTree } from "./hooks/useFileTree";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { useEdits } from "./hooks/useEdits";
 import { useProjects } from "./hooks/useProjects";
+import type { Project } from "./hooks/useProjects";
+import {
+  driveConfigured,
+  isDriveConnected,
+  connectBackup,
+  saveBackup,
+  restoreBackup,
+} from "./lib/backup";
 import { useTokenVault } from "./hooks/useTokenVault";
 import { usePersonality } from "./hooks/usePersonality";
 import { useGuardrails } from "./hooks/useGuardrails";
@@ -298,6 +306,125 @@ export default function App() {
     },
     [projects, describeImport, showImportNotice]
   );
+  interface CrackerboxBackupPayload {
+    projects: Project[];
+    activeProjectId: string;
+    exportedAt: string;
+  }
+
+  const [driveConnected, setDriveConnected] = useState(isDriveConnected());
+  const [driveBusy, setDriveBusy] = useState(false);
+  const [driveStatus, setDriveStatus] = useState<string | null>(null);
+
+  const buildBackupPayload = useCallback(
+    (): CrackerboxBackupPayload => ({
+      projects: projects.projects,
+      activeProjectId: projects.activeProjectId,
+      exportedAt: new Date().toISOString(),
+    }),
+    [projects.projects, projects.activeProjectId]
+  );
+
+  const applyRestoredBackup = useCallback(
+    async (data: Partial<CrackerboxBackupPayload>) => {
+      if (!Array.isArray(data.projects) || data.projects.length === 0) {
+        showImportNotice("That backup has no projects in it.");
+        return false;
+      }
+      await projects.restoreAll({ projects: data.projects, activeProjectId: data.activeProjectId });
+      showImportNotice(`Restored ${data.projects.length} project${data.projects.length === 1 ? "" : "s"}.`);
+      return true;
+    },
+    [projects, showImportNotice]
+  );
+
+  const handleDriveConnect = useCallback(async () => {
+    setDriveBusy(true);
+    setDriveStatus(null);
+    try {
+      await connectBackup();
+      setDriveConnected(true);
+      setDriveStatus("Connected to Google Drive.");
+    } catch (err) {
+      setDriveStatus(err instanceof Error ? err.message : "Could not connect to Google Drive.");
+    } finally {
+      setDriveBusy(false);
+    }
+  }, []);
+
+  const handleDriveSave = useCallback(async () => {
+    setDriveBusy(true);
+    setDriveStatus(null);
+    try {
+      await saveBackup(buildBackupPayload());
+      setDriveConnected(true);
+      setDriveStatus(`Saved ${projects.projects.length} project(s) to Google Drive.`);
+    } catch (err) {
+      setDriveStatus(err instanceof Error ? err.message : "Save to Drive failed.");
+    } finally {
+      setDriveBusy(false);
+    }
+  }, [buildBackupPayload, projects.projects.length]);
+
+  const handleDriveRestore = useCallback(async () => {
+    setDriveBusy(true);
+    setDriveStatus(null);
+    try {
+      const data = await restoreBackup<CrackerboxBackupPayload>();
+      if (!data) {
+        setDriveStatus("No backup found in Drive yet — save one first.");
+        return;
+      }
+      if (
+        !window.confirm(
+          `Restore ${data.projects?.length ?? 0} project(s) from Drive? This replaces every project currently on this device.`
+        )
+      ) {
+        return;
+      }
+      const ok = await applyRestoredBackup(data);
+      if (ok) {
+        setDriveConnected(true);
+        setDriveStatus("Restored from Google Drive.");
+      }
+    } catch (err) {
+      setDriveStatus(err instanceof Error ? err.message : "Restore from Drive failed.");
+    } finally {
+      setDriveBusy(false);
+    }
+  }, [applyRestoredBackup]);
+
+  const handleExportBackupJSON = useCallback(() => {
+    const blob = new Blob([JSON.stringify(buildBackupPayload(), null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `crackerbox-studio-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setDriveStatus("Exported JSON file.");
+  }, [buildBackupPayload]);
+
+  const handleImportBackupJSONFile = useCallback(
+    async (file: File) => {
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text) as Partial<CrackerboxBackupPayload>;
+        if (
+          !window.confirm(
+            `Import ${parsed.projects?.length ?? 0} project(s) from this file? This replaces every project currently on this device.`
+          )
+        ) {
+          return;
+        }
+        await applyRestoredBackup(parsed);
+      } catch (err) {
+        showImportNotice(err instanceof Error ? `Import failed: ${err.message}` : "Import failed.");
+      }
+    },
+    [applyRestoredBackup, showImportNotice]
+  );
+
   const modelSource = useModels();
 
   const selectedModel = modelSource.models.find((m) => m.id === parameters.selectedModelId);
@@ -715,6 +842,15 @@ export default function App() {
                 onImportZip={handleImportZip}
                 onImportData={handleImportData}
                 notice={importNotice}
+                driveConfigured={driveConfigured}
+                driveConnected={driveConnected}
+                driveBusy={driveBusy}
+                driveStatus={driveStatus}
+                onDriveConnect={handleDriveConnect}
+                onDriveSave={handleDriveSave}
+                onDriveRestore={handleDriveRestore}
+                onExportJSON={handleExportBackupJSON}
+                onImportJSONFile={handleImportBackupJSONFile}
               />
             )}
             {sidebarTab === "deploy" && (
