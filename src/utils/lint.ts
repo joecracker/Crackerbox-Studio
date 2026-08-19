@@ -15,8 +15,8 @@ export type LintResult =
   | { ok: true; errors: number; warnings: number; issues: LintIssue[] }
   | { ok: false; unavailable: true; error?: string };
 
-const LINT_DIR = "/crackerbox-lint";
-const INSTALL_TIMEOUT_MS = 180_000;
+const LINT_DIR = "crackerbox-lint";
+const INSTALL_TIMEOUT_MS = 240_000;
 const LINT_TIMEOUT_MS = 120_000;
 
 const LINTABLE_EXT_RE = /\.(ts|tsx|js|jsx|mjs|cjs)$/i;
@@ -59,7 +59,7 @@ export function isLintablePath(path: string): boolean {
   return LINTABLE_EXT_RE.test(path);
 }
 
-async function ensureLintSetup(container: WebContainer): Promise<boolean> {
+async function ensureLintSetup(container: WebContainer): Promise<{ ok: boolean; reason?: string }> {
   try {
     try {
       await container.fs.mkdir(LINT_DIR, { recursive: true });
@@ -68,7 +68,12 @@ async function ensureLintSetup(container: WebContainer): Promise<boolean> {
     }
     try {
       await container.fs.readFile(`${LINT_DIR}/.ready`, "utf-8");
-      return true;
+      try {
+        await container.fs.readFile(`${LINT_DIR}/node_modules/eslint/bin/eslint.js`);
+        return { ok: true };
+      } catch {
+        // stale marker — eslint is not actually installed; fall through to reinstall
+      }
     } catch {
       // not set up yet
     }
@@ -77,15 +82,22 @@ async function ensureLintSetup(container: WebContainer): Promise<boolean> {
     const result = await spawnCommandInContainer(
       container,
       "npm",
-      ["install", "--no-audit", "--no-fund", "--no-progress"],
-      LINT_DIR,
+      ["install", "--prefix", LINT_DIR, "--no-audit", "--no-fund", "--no-progress"],
+      "/",
       INSTALL_TIMEOUT_MS
     );
-    if (result.error || result.timedOut || result.exitCode !== 0) return false;
+    if (result.error || result.timedOut || result.exitCode !== 0) {
+      return {
+        ok: false,
+        reason:
+          result.error ??
+          (result.timedOut ? "npm install timed out" : `npm install exited ${result.exitCode}`),
+      };
+    }
     await container.fs.writeFile(`${LINT_DIR}/.ready`, "ok");
-    return true;
+    return { ok: true };
   } catch {
-    return false;
+    return { ok: false, reason: "unexpected setup error" };
   }
 }
 
@@ -136,8 +148,9 @@ export async function lintContentInContainer(
   }
   let tmpPath = "";
   try {
-    if (!(await ensureLintSetup(container))) {
-      return { ok: false, unavailable: true, error: "Could not set up the linter." };
+    const setup = await ensureLintSetup(container);
+    if (!setup.ok) {
+      return { ok: false, unavailable: true, error: setup.reason ?? "Could not set up the linter." };
     }
     const extIndex = rawPath.lastIndexOf(".");
     const ext = extIndex >= 0 ? rawPath.slice(extIndex) : ".js";
@@ -172,7 +185,12 @@ export async function lintContentInContainer(
     }
     const issues = parseEslintJson(result.output);
     if (!issues) {
-      return { ok: false, unavailable: true, error: "Could not read lint output." };
+      const snippet = result.output.replace(/\s+/g, " ").trim().slice(0, 200);
+      return {
+        ok: false,
+        unavailable: true,
+        error: `Could not read lint output. Raw: ${snippet || "(empty)"}`,
+      };
     }
     const errors = issues.filter((i) => i.severity === 2).length;
     const warnings = issues.length - errors;

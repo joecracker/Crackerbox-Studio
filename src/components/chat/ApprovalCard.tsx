@@ -51,7 +51,7 @@ function LintSummary({ lint }: { lint: LintResult }) {
   if (!lint.ok) {
     return (
       <p className="border-b border-zinc-800/70 px-3 py-2 text-[11px] text-zinc-500">
-        Lint check unavailable
+        Lint check unavailable{lint.error ? `: ${lint.error}` : ""}
       </p>
     );
   }
