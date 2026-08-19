@@ -153,6 +153,9 @@ export default function ApprovalCard({ approval, onApprove, onReject }: Approval
         </div>
       )}
       <div className="flex items-center justify-end gap-2 border-t border-zinc-800 bg-zinc-900/60 px-3 py-2">
+        <p className="mr-auto text-[11px] text-zinc-500">
+          Or just type your answer below — e.g. “yes”, “no”, “skip the delete”.
+        </p>
         <button
           type="button"
           onClick={onReject}

@@ -53,6 +53,8 @@ interface ComposerProps {
   busy?: boolean;
   modelLabel?: string | null;
   visionSupported?: boolean;
+  approvalPending?: boolean;
+  onApprovalReply?: (text: string) => "resolved" | "ambiguous";
 }
 
 function formatSize(bytes: number): string {
@@ -69,20 +71,28 @@ export default function Composer({
   busy = false,
   modelLabel = null,
   visionSupported = true,
+  approvalPending = false,
+  onApprovalReply,
 }: ComposerProps) {
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [listening, setListening] = useState(false);
   const [visionWarning, setVisionWarning] = useState<string | null>(null);
+  const [approvalHint, setApprovalHint] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   const canSend = text.trim().length > 0 || attachments.length > 0;
+  const effectiveBusy = busy && !approvalPending;
 
   useEffect(() => {
     if (visionSupported) setVisionWarning(null);
   }, [visionSupported]);
+
+  useEffect(() => {
+    if (!approvalPending) setApprovalHint(null);
+  }, [approvalPending]);
 
   const syncHeight = () => {
     const el = textareaRef.current;
@@ -153,7 +163,19 @@ export default function Composer({
 
   const handleSend = () => {
     if (!canSend) return;
-    if (disabled || busy) return;
+    if (disabled || effectiveBusy) return;
+    if (approvalPending && onApprovalReply) {
+      const result = onApprovalReply(text.trim());
+      if (result === "ambiguous") {
+        setApprovalHint(
+          "I couldn't tell if that was a yes or a no — try 'yes', 'no', or something like 'skip the delete'."
+        );
+        return;
+      }
+      setApprovalHint(null);
+      resetComposer();
+      return;
+    }
     onSend(text.trim(), attachments);
     resetComposer();
   };
@@ -320,6 +342,11 @@ export default function Composer({
             </button>
           </div>
         )}
+        {approvalHint && (
+          <div className="flex items-start gap-1.5 border-b border-zinc-800 px-3 py-1.5 text-[11px] leading-relaxed text-sky-400/90">
+            <span>{approvalHint}</span>
+          </div>
+        )}
         <textarea
           ref={textareaRef}
           value={text}
@@ -327,7 +354,11 @@ export default function Composer({
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           rows={1}
-          placeholder="Ask anything…"
+          placeholder={
+            approvalPending
+              ? "Type your answer — e.g. 'yes', 'no', 'skip the delete'"
+              : "Ask anything…"
+          }
           className="block w-full resize-none bg-transparent px-3 pb-1 pt-3 text-sm leading-relaxed text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
           style={{ minHeight: 60, maxHeight: 200, overflowY: "auto" }}
         />
@@ -406,9 +437,9 @@ export default function Composer({
           <button
             type="button"
             onClick={handleSend}
-            disabled={!canSend || disabled || busy}
+            disabled={!canSend || disabled || effectiveBusy}
             aria-label="Send message"
-            title={busy ? "Waiting for reply…" : "Send (Enter)"}
+            title={approvalPending ? "Send your answer (Enter)" : busy ? "Waiting for reply…" : "Send (Enter)"}
             className="flex h-7 w-7 items-center justify-center rounded-md bg-sky-500 text-zinc-950 transition-colors hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">

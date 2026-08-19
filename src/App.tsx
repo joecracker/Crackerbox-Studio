@@ -986,6 +986,11 @@ export default function App() {
                     ? () => chatStream.resolveApproval(chatStream.approval!.callId, false)
                     : () => {}
                 }
+                onApprovalReply={(reply) =>
+                  chatStream.approval
+                    ? chatStream.resolveApprovalWithReply(chatStream.approval.callId, reply)
+                    : "ambiguous"
+                }
                 runtimeAvailable={webContainer.available}
                 runtimeError={webContainer.error}
               />

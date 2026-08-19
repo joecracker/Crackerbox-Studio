@@ -16,6 +16,11 @@ import {
 import { checkCommandDenylist } from "../utils/commandGuard";
 import { buildFileIndex, isExplicitlyRequested, isTinySafeEdit } from "../utils/approvalPolicy";
 import type { GuardrailMode } from "../utils/approvalPolicy";
+import {
+  interpretApprovalReply,
+  type ApprovalActionName,
+  type ApprovalReplyDecision,
+} from "../utils/approvalReply";
 import { lintContentInContainer, isLintablePath } from "../utils/lint";
 import type { LintResult } from "../utils/lint";
 import type {
@@ -272,6 +277,7 @@ export interface ChatStreamState {
   stream: (text: string, attachments: ChatAttachment[]) => Promise<ChatStreamResult>;
   approval: PendingApproval | null;
   resolveApproval: (callId: string, approved: boolean) => void;
+  resolveApprovalWithReply: (callId: string, reply: string) => "resolved" | "ambiguous";
 }
 
 function decodeDataUrl(dataUrl: string): string {
@@ -419,6 +425,7 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
   const optionsRef = useRef(options);
   optionsRef.current = options;
   const approvalResolverRef = useRef<((approved: boolean) => void) | null>(null);
+  const approvalBatchRef = useRef<ApprovalReplyDecision | null>(null);
 
   useEffect(() => {
     return () => abortRef.current?.abort();
@@ -449,6 +456,34 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
     approvalResolverRef.current?.(approved);
     approvalResolverRef.current = null;
   }, []);
+
+  const resolveApprovalWithReply = useCallback(
+    (callId: string, reply: string): "resolved" | "ambiguous" => {
+      const decision = interpretApprovalReply(reply);
+      const current = approval;
+      if (decision.kind === "unknown") return "ambiguous";
+      if (current && current.callId !== callId) return "ambiguous";
+      approvalBatchRef.current = decision;
+      if (decision.kind === "approve") {
+        approvalResolverRef.current?.(true);
+      } else if (decision.kind === "reject") {
+        approvalResolverRef.current?.(false);
+      } else if (decision.kind === "approveAll") {
+        approvalResolverRef.current?.(true);
+      } else if (decision.kind === "rejectAll") {
+        approvalResolverRef.current?.(false);
+      } else if (decision.kind === "perAction") {
+        const name = current?.name ?? "unknown";
+        const verdict =
+          name in decision.actions ? decision.actions[name as ApprovalActionName] : decision.defaultForOthers;
+        approvalResolverRef.current?.(verdict);
+      }
+      approvalResolverRef.current = null;
+      setApproval(null);
+      return "resolved";
+    },
+    [approval]
+  );
 
   const stream = useCallback(
     async (text: string, attachments: ChatAttachment[]): Promise<ChatStreamResult> => {
@@ -489,6 +524,7 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
       busyRef.current = true;
       setBusy(true);
       setError(null);
+      approvalBatchRef.current = null;
 
       let assistantId = appendAssistant();
       const controller = new AbortController();
@@ -513,6 +549,7 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
         setBusy(false);
         setApproval(null);
         approvalResolverRef.current = null;
+        approvalBatchRef.current = null;
         return result;
       };
 
@@ -522,11 +559,26 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
         return finish({ ok: false, error: message });
       };
 
-      const requestApproval = (pending: PendingApproval): Promise<boolean> =>
-        new Promise<boolean>((resolve) => {
+      const requestApproval = (pending: PendingApproval): Promise<boolean> => {
+        const batch = approvalBatchRef.current;
+        if (batch) {
+          if (batch.kind === "approveAll") return Promise.resolve(true);
+          if (batch.kind === "rejectAll") return Promise.resolve(false);
+          if (batch.kind === "approve") return Promise.resolve(true);
+          if (batch.kind === "reject") return Promise.resolve(false);
+          if (batch.kind === "perAction") {
+            const verdict =
+              pending.name in batch.actions
+                ? batch.actions[pending.name as ApprovalActionName]
+                : batch.defaultForOthers;
+            return Promise.resolve(verdict);
+          }
+        }
+        return new Promise<boolean>((resolve) => {
           approvalResolverRef.current = resolve;
           setApproval(pending);
         });
+      };
 
       const parseArgs = (raw: string): Record<string, unknown> => {
         try {
@@ -877,5 +929,5 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
     []
   );
 
-  return { busy, error, dismissError, stream, approval, resolveApproval };
+  return { busy, error, dismissError, stream, approval, resolveApproval, resolveApprovalWithReply };
 }
