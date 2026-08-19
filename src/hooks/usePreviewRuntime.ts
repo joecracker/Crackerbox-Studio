@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { WebContainer, WebContainerProcess } from "@webcontainer/api";
+import { detectPreviewError, hashString } from "../utils/devError";
+import type { DetectedPreviewError } from "../utils/devError";
 
 export type PreviewStatus = "static" | "installing" | "starting" | "live" | "failed";
 
@@ -46,6 +48,12 @@ interface PreviewRuntimeState {
   url: string | null;
   error: string | null;
   /**
+   * When the dev server output contains a recognizable failure this is set to a
+   * plain-English summary. Cleared when the server starts or the user dismisses it.
+   */
+  detectedError: DetectedPreviewError | null;
+  dismissError: () => void;
+  /**
    * Bumped every time the preview transitions into (or changes) a live server. The iframe
    * keys off this so it always remounts — even when a fresh container restarts the dev
    * server on the same port/URL, which React would otherwise not reload.
@@ -56,7 +64,9 @@ interface PreviewRuntimeState {
 const INSTALL_TIMEOUT_MS = 180_000;
 const RESTART_DELAY_MS = 800;
 const MAX_RESTART_ATTEMPTS = 3;
+const MAX_LIMIT = 1_000_000;
 
+/** Reads and discards a process stream (install steps etc). */
 function drain(proc: WebContainerProcess): void {
   const reader = proc.output.getReader();
   void (async () => {
@@ -64,6 +74,33 @@ function drain(proc: WebContainerProcess): void {
       for (;;) {
         const { done } = await reader.read();
         if (done) break;
+      }
+    } catch {
+      // stream closed on kill
+    }
+  })();
+}
+
+/** Reads a stream into a rolling buffer, invoking `onOutput` per chunk. */
+function capture(
+  proc: WebContainerProcess,
+  bufferRef: { current: string },
+  onOutput: (chunk: string) => void
+): void {
+  const reader = proc.output.getReader();
+  void (async () => {
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk =
+          typeof value === "string"
+            ? value
+            : value
+              ? new TextDecoder().decode(value as AllowSharedBufferSource)
+              : "";
+        bufferRef.current = (bufferRef.current + chunk).slice(-MAX_LIMIT);
+        onOutput(chunk);
       }
     } catch {
       // stream closed on kill
@@ -128,6 +165,7 @@ export function usePreviewRuntime({
   const [status, setStatus] = useState<PreviewStatus>("static");
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [detectedError, setDetectedError] = useState<DetectedPreviewError | null>(null);
   const [liveEpoch, setLiveEpoch] = useState(0);
   const procRef = useRef<WebContainerProcess | null>(null);
   const containerRef = useRef<WebContainer | null>(null);
@@ -139,6 +177,10 @@ export function usePreviewRuntime({
   const deniedKeysRef = useRef<Set<string>>(new Set());
   const statusRef = useRef<PreviewStatus>("static");
   const urlRef = useRef<string | null>(null);
+  const outputBufferRef = useRef("");
+  const detectedErrorIdRef = useRef<string | null>(null);
+  const dismissedErrorIdsRef = useRef<Set<string>>(new Set());
+  const hasDevErrorRef = useRef(false);
   useEffect(() => {
     statusRef.current = status;
   }, [status]);
@@ -182,10 +224,68 @@ export function usePreviewRuntime({
     }
   };
 
+  const dismissError = useCallback(() => {
+    if (detectedErrorIdRef.current) {
+      dismissedErrorIdsRef.current.add(detectedErrorIdRef.current);
+    }
+    detectedErrorIdRef.current = null;
+    setDetectedError(null);
+  }, []);
+
+  const clearDetectedError = useCallback(() => {
+    detectedErrorIdRef.current = null;
+    hasDevErrorRef.current = false;
+    setDetectedError(null);
+  }, []);
+
+  const considerOutput = useCallback((snippet: string) => {
+    if (hasDevErrorRef.current) return;
+    const found = detectPreviewError(snippet);
+    if (!found) return;
+    if (dismissedErrorIdsRef.current.has(found.id)) return;
+    hasDevErrorRef.current = true;
+    detectedErrorIdRef.current = found.id;
+    setDetectedError(found);
+  }, []);
+
+  const considerExit = useCallback(
+    (code: number) => {
+      const buffer = outputBufferRef.current;
+      if (code === 0) return;
+      if (hasDevErrorRef.current) return;
+      const found = detectPreviewError(
+        `${buffer}\n-- dev server exited with code ${code} --`
+      );
+      if (found) {
+        if (!dismissedErrorIdsRef.current.has(found.id)) {
+          hasDevErrorRef.current = true;
+          detectedErrorIdRef.current = found.id;
+          setDetectedError(found);
+        }
+        return;
+      }
+      const synthetic: DetectedPreviewError = {
+        id: hashString(`exit:${code}`),
+        title: "Dev server stopped",
+        summary:
+          "The dev server stopped unexpectedly. This can happen when the app crashes while running or the server can't keep up.",
+        snippet: (buffer || "(no output)").slice(-900),
+      };
+      if (!dismissedErrorIdsRef.current.has(synthetic.id)) {
+        hasDevErrorRef.current = true;
+        detectedErrorIdRef.current = synthetic.id;
+        setDetectedError(synthetic);
+      }
+    },
+    []
+  );
+
   const startDevServer = useCallback(
     async (wc: WebContainer, key: string) => {
       if (startingRef.current || procRef.current) return;
       startingRef.current = true;
+      outputBufferRef.current = "";
+      clearDetectedError();
       setStatus("installing");
       setUrl(null);
       setError(null);
@@ -232,11 +332,17 @@ export function usePreviewRuntime({
         containerRef.current = wc;
         projectKeyRef.current = key;
         procRef.current = proc;
-        drain(proc);
+        capture(proc, outputBufferRef, considerOutput);
         void proc.exit.then((code) => {
           if (procRef.current !== proc) return;
           procRef.current = null;
           setUrl(null);
+          considerExit(code);
+          if (hasDevErrorRef.current) {
+            setStatus("failed");
+            setError("The dev server stopped — look above for what went wrong.");
+            return;
+          }
           if (restartAttemptsRef.current >= MAX_RESTART_ATTEMPTS) {
             setStatus("failed");
             setError(`Dev server exited unexpectedly (exit code ${code}).`);
@@ -273,14 +379,16 @@ export function usePreviewRuntime({
       setStatus("static");
       setUrl(null);
       setError(null);
+      clearDetectedError();
       return;
     }
     setStatus("installing");
     setUrl(null);
     setError(null);
+    clearDetectedError();
     void startDevServer(wc, projectKey ?? "");
     return () => cleanup();
-  }, [container, ready, available, projectKey, cleanup, startDevServer]);
+  }, [container, ready, available, projectKey, cleanup, startDevServer, clearDetectedError]);
 
   useEffect(() => {
     const wc = container;
@@ -289,5 +397,5 @@ export function usePreviewRuntime({
     void startDevServer(wc, projectKey ?? "");
   }, [mutationTick, container, ready, available, projectKey, startDevServer]);
 
-  return { status, url, error, liveEpoch };
+  return { status, url, error, detectedError, dismissError, liveEpoch };
 }

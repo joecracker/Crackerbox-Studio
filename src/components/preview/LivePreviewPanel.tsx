@@ -7,6 +7,7 @@ import type { PreviewBrowser, PreviewBrowserMode } from "../../hooks/usePreviewB
 import { GITHUB_HOME, GITHUB_REPO } from "../../hooks/usePreviewBrowser";
 import type { PreviewStatus } from "../../hooks/usePreviewRuntime";
 import type { PendingApproval } from "../../hooks/useChatStream";
+import type { DetectedPreviewError } from "../../utils/devError";
 
 interface LivePreviewPanelProps {
   width: number;
@@ -23,6 +24,9 @@ interface LivePreviewPanelProps {
   approval?: PendingApproval | null;
   onApprove?: () => void;
   onReject?: () => void;
+  detectedError?: DetectedPreviewError | null;
+  onFixError?: () => void;
+  onDismissError?: () => void;
 }
 
 function StatusPill({ status, srcDoc }: { status: PreviewStatus; srcDoc: string | null }) {
@@ -146,6 +150,9 @@ export default function LivePreviewPanel({
   approval,
   onApprove,
   onReject,
+  detectedError,
+  onFixError,
+  onDismissError,
 }: LivePreviewPanelProps) {
   const toolbar = usePreviewToolbar();
   const show = toolbar.visible;
@@ -253,6 +260,66 @@ export default function LivePreviewPanel({
             />
           </div>
         </header>
+        {detectedError && (onFixError || onDismissError) && (
+          <div className="shrink-0 border-t border-red-900/60 bg-red-950/40 px-3 py-2">
+            <div className="flex items-start gap-2">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="none"
+                aria-hidden="true"
+                className="mt-0.5 shrink-0 text-red-400"
+              >
+                <path
+                  d="M8 1.8 15 13.8H1L8 1.8Z"
+                  stroke="currentColor"
+                  strokeWidth="1.3"
+                  strokeLinejoin="round"
+                />
+                <path d="M8 6v3M8 11.2v.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+              </svg>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-medium text-red-300">
+                  The app hit a problem: {detectedError.title}
+                </p>
+                {detectedError.file && (
+                  <p className="mt-0.5 truncate font-mono text-[10px] text-red-400/80">
+                    {detectedError.file}
+                  </p>
+                )}
+                <p className="mt-0.5 text-[11px] leading-relaxed text-red-200/70">
+                  {detectedError.summary}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-start gap-2">
+                {onFixError && (
+                  <button
+                    type="button"
+                    onClick={onFixError}
+                    disabled={busy}
+                    title={busy ? "Waiting for the assistant…" : "Ask the assistant to fix it"}
+                    className="rounded border border-red-700 bg-red-500/15 px-2.5 py-1 text-[11px] font-medium text-red-200 transition-colors hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Fix it
+                  </button>
+                )}
+                {onDismissError && (
+                  <button
+                    type="button"
+                    onClick={onDismissError}
+                    aria-label="Dismiss error"
+                    className="flex h-6 w-6 items-center justify-center rounded text-red-300/70 transition-colors hover:bg-red-900/40 hover:text-red-200"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
         {webMode && browser.url ? (
           <iframe
             title="Web browser"

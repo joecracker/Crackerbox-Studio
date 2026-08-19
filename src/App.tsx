@@ -316,6 +316,23 @@ export default function App() {
     void webContainer.reset(activeFiles, projects.activeProjectId);
   }, [webContainer, activeFiles, projects.activeProjectId]);
 
+  const handleFixError = useCallback(() => {
+    const err = previewRuntime.detectedError;
+    if (!err || chatStream.busy) return;
+    const prompt = [
+      "The live preview just hit a problem. Here's what the dev server reported:",
+      "",
+      "```",
+      err.snippet,
+      "```",
+      "",
+      "Please figure out what's wrong and fix it. Make the smallest safe change that resolves the",
+      "problem, and explain simply what was wrong and what you did. Your changes may ask for approval.",
+    ].join("\n");
+    chat.send(prompt, []);
+    void chatStream.stream(prompt, []);
+  }, [previewRuntime.detectedError, chatStream.busy, chat, chatStream]);
+
   const previewBrowser = usePreviewBrowser();
 
   const [importNotice, setImportNotice] = useState<string | null>(null);
@@ -1016,6 +1033,9 @@ export default function App() {
               approval={previewApproval}
               onApprove={handlePreviewApprove}
               onReject={handlePreviewReject}
+              detectedError={previewRuntime.detectedError}
+              onFixError={handleFixError}
+              onDismissError={previewRuntime.dismissError}
             />
           )}
         </div>
