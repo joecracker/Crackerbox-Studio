@@ -10,7 +10,7 @@ const MODES: Array<{ id: GuardrailMode; label: string; description: string }> = 
     id: "tiered",
     label: "Tiered guardrails",
     description:
-      "File edits you explicitly asked for in your message apply immediately (the diff is still shown). Deletes, commands, package installs, and any file the model proposes on its own still require approval.",
+      "File edits you explicitly asked for apply immediately, and tiny safe edits (4 lines or fewer, never config or dependency files) also apply instantly with the diff shown. Deletes, commands, package installs, new files, and bigger changes still require approval.",
   },
   {
     id: "all",

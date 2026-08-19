@@ -14,7 +14,7 @@ import {
   readFileInContainer,
 } from "../utils/workspaceWebContainer";
 import { checkCommandDenylist } from "../utils/commandGuard";
-import { buildFileIndex, isExplicitlyRequested } from "../utils/approvalPolicy";
+import { buildFileIndex, isExplicitlyRequested, isTinySafeEdit } from "../utils/approvalPolicy";
 import type { GuardrailMode } from "../utils/approvalPolicy";
 import { lintContentInContainer, isLintablePath } from "../utils/lint";
 import type { LintResult } from "../utils/lint";
@@ -723,7 +723,8 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
             const autoApproved =
               call.name === "write_file" &&
               guardrailMode === "tiered" &&
-              isExplicitlyRequested(path, text, fileIndex);
+              (isExplicitlyRequested(path, text, fileIndex) ||
+                isTinySafeEdit(path, oldContent, content));
             patchAssistantToolCall(assistantId, call.id, {
               status: autoApproved ? "running" : "approval",
               result: undefined,

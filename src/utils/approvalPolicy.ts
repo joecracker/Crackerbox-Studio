@@ -1,7 +1,21 @@
 import type { DemoFile } from "../data/demoFiles";
 import { flattenFiles } from "../data/demoFiles";
+import { diffLines, diffStat } from "./diff";
 
 export type GuardrailMode = "tiered" | "all";
+
+const TINY_EDIT_MAX_CHANGED_LINES = 4;
+
+const SENSITIVE_BASENAME_RE =
+  /^(?:package\.json|package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|\.env(?:\.\w+)?|vite\.config\.[cm]?[jt]s|tsconfig(?:\.\w+)?\.json|eslint\.config\.[cm]?[jt]s|prettier\.config\.[cm]?[jt]s|.*\.config\.[cm]?[jt]s)$/i;
+
+export function isTinySafeEdit(path: string, oldContent: string, newContent: string): boolean {
+  if (!oldContent) return false;
+  const basename = path.split("/").pop() ?? path;
+  if (SENSITIVE_BASENAME_RE.test(basename)) return false;
+  const { added, removed } = diffStat(diffLines(oldContent, newContent));
+  return added + removed <= TINY_EDIT_MAX_CHANGED_LINES;
+}
 
 export interface FileIndex {
   paths: Set<string>;
