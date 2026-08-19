@@ -54,6 +54,7 @@ import { useChatStream } from "./hooks/useChatStream";
 import type { PendingApproval } from "./hooks/useChatStream";
 import { useWebContainer } from "./hooks/useWebContainer";
 import { usePreviewRuntime } from "./hooks/usePreviewRuntime";
+import { usePreviewBrowser } from "./hooks/usePreviewBrowser";
 import type { PreviewApprovalRequest } from "./hooks/usePreviewRuntime";
 import { flattenFiles } from "./data/demoFiles";
 import type { DemoFile } from "./data/demoFiles";
@@ -272,6 +273,8 @@ export default function App() {
   const handleResetContainer = useCallback(() => {
     void webContainer.reset(activeFiles, projects.activeProjectId);
   }, [webContainer, activeFiles, projects.activeProjectId]);
+
+  const previewBrowser = usePreviewBrowser();
 
   const [importNotice, setImportNotice] = useState<string | null>(null);
   const importNoticeTimer = useRef<number | undefined>(undefined);
@@ -957,6 +960,7 @@ export default function App() {
               liveEpoch={previewRuntime.liveEpoch}
               busy={chatStream.busy}
               onRestart={handleResetContainer}
+              browser={previewBrowser}
               approval={previewApproval}
               onApprove={handlePreviewApprove}
               onReject={handlePreviewReject}
