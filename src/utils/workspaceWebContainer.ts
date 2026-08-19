@@ -205,6 +205,25 @@ export async function runCommandInContainer(
   return { ...result, ok: true };
 }
 
+export async function spawnCommandInContainer(
+  container: WebContainer,
+  command: string,
+  args: string[],
+  cwd: string,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS
+): Promise<CommandResult> {
+  let proc: WebContainerProcess;
+  try {
+    proc = await container.spawn(command, args, { cwd });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "spawn failed";
+    return { ok: false, exitCode: -1, output: "", timedOut: false, error: message };
+  }
+  const result = await runProcess(proc, timeoutMs);
+  if (result.error) return { ...result, ok: false };
+  return { ...result, ok: true };
+}
+
 export async function installPackageInContainer(
   container: WebContainer,
   spec: string,

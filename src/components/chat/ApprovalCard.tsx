@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type { PendingApproval } from "../../hooks/useChatStream";
+import type { LintResult } from "../../utils/lint";
 import { diffLines, diffStat } from "../../utils/diff";
 import { checkCommandDenylist } from "../../utils/commandGuard";
 
@@ -46,6 +47,46 @@ function ApprovalDiff({ added, removed }: { added: number; removed: number }) {
   );
 }
 
+function LintSummary({ lint }: { lint: LintResult }) {
+  if (!lint.ok) {
+    return (
+      <p className="border-b border-zinc-800/70 px-3 py-2 text-[11px] text-zinc-500">
+        Lint check unavailable
+      </p>
+    );
+  }
+  const visible = lint.issues.slice(0, 5);
+  return (
+    <div className="border-b border-zinc-800/70 px-3 py-2">
+      <div className="flex items-center gap-2 text-[11px]">
+        <span className={lint.errors > 0 ? "font-medium text-red-400" : "text-emerald-400"}>
+          {lint.errors} error{lint.errors === 1 ? "" : "s"}
+        </span>
+        <span className="text-zinc-600">·</span>
+        <span className={lint.warnings > 0 ? "text-amber-400" : "text-zinc-500"}>
+          {lint.warnings} warning{lint.warnings === 1 ? "" : "s"}
+        </span>
+      </div>
+      {visible.length > 0 && (
+        <ul className="mt-1.5 space-y-0.5">
+          {visible.map((issue, i) => (
+            <li key={i} className="font-mono text-[11px] leading-snug">
+              <span className={issue.severity === 2 ? "text-red-400" : "text-amber-400"}>
+                {issue.severity === 2 ? "E" : "W"} {issue.line}:{issue.column}
+              </span>{" "}
+              <span className="text-zinc-300">{issue.message}</span>
+              {issue.ruleId && <span className="text-zinc-600"> ({issue.ruleId})</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {lint.issues.length > 5 && (
+        <p className="mt-1 text-[11px] text-zinc-600">…and {lint.issues.length - 5} more</p>
+      )}
+    </div>
+  );
+}
+
 export default function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProps) {
   const isDiff = approval.name === "write_file" || approval.name === "delete_file";
   const lines = useMemo(
@@ -77,6 +118,7 @@ export default function ApprovalCard({ approval, onApprove, onReject }: Approval
           {approval.rationale}
         </p>
       )}
+      {approval.name === "write_file" && approval.lint && <LintSummary lint={approval.lint} />}
       {isDiff ? (
         <div className="max-h-56 overflow-y-auto px-3 py-2">
           <code className="block w-max min-w-full font-mono text-[11px] leading-relaxed">

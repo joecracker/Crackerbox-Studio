@@ -5,7 +5,14 @@
  */
 
 /** Directories excluded when mirroring the container back into the project tree. */
-export const SYNC_EXCLUDED_DIRS = new Set(["node_modules", ".git", "dist", "build", ".cache"]);
+export const SYNC_EXCLUDED_DIRS = new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  "build",
+  ".cache",
+  "crackerbox-lint",
+]);
 
 export const SYNC_MAX_FILE_BYTES = 1024 * 1024;
 

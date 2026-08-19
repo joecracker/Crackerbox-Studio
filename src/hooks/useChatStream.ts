@@ -16,6 +16,8 @@ import {
 import { checkCommandDenylist } from "../utils/commandGuard";
 import { buildFileIndex, isExplicitlyRequested } from "../utils/approvalPolicy";
 import type { GuardrailMode } from "../utils/approvalPolicy";
+import { lintContentInContainer, isLintablePath } from "../utils/lint";
+import type { LintResult } from "../utils/lint";
 import type {
   ChatToolCall,
   ChatAttachment,
@@ -260,6 +262,7 @@ export interface PendingApproval {
   newContent: string;
   rationale: string;
   command?: string;
+  lint?: LintResult | null;
 }
 
 export interface ChatStreamState {
@@ -728,17 +731,30 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
               newContent: call.name === "delete_file" ? "" : content,
               autoApproved,
             });
-            const approved =
-              autoApproved ||
-              (await requestApproval({
-                callId: call.id,
-                name: call.name,
-                path,
-                content,
-                oldContent,
-                newContent: call.name === "delete_file" ? "" : content,
-                rationale: turnText,
-              }));
+            const pending: PendingApproval = {
+              callId: call.id,
+              name: call.name,
+              path,
+              content,
+              oldContent,
+              newContent: call.name === "delete_file" ? "" : content,
+              rationale: turnText,
+            };
+            if (!autoApproved && isLintablePath(path)) {
+              void (async () => {
+                try {
+                  const container = await whenReady(READY_TIMEOUT_MS);
+                  if (!container) return;
+                  const lint = await lintContentInContainer(container, path, content);
+                  setApproval((current) =>
+                    current && current.callId === call.id ? { ...current, lint } : current
+                  );
+                } catch {
+                  // lint is best-effort; never block or break the approval flow
+                }
+              })();
+            }
+            const approved = autoApproved || (await requestApproval(pending));
             if (!approved) {
               const rejection = "User rejected this action. Please adjust your approach and propose an alternative.";
               patchAssistantToolCall(assistantId, call.id, { status: "rejected", result: rejection });
