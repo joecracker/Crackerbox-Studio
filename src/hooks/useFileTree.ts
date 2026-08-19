@@ -1,5 +1,8 @@
 import { useMemo, useState } from "react";
+import { usePersistentState } from "./usePersistentState";
 import type { DemoFile } from "../data/demoFiles";
+
+const FILE_TREE_KEY = "crackerbox.fileTree";
 
 function findNode(nodes: DemoFile[], path: string): DemoFile | undefined {
   for (const node of nodes) {
@@ -13,7 +16,11 @@ function findNode(nodes: DemoFile[], path: string): DemoFile | undefined {
 }
 
 export function useFileTree(files: DemoFile[]) {
-  const [activePath, setActivePath] = useState<string | null>(null);
+  const [activeState, setActiveState] = usePersistentState<{ activePath: string | null }>(
+    FILE_TREE_KEY,
+    { activePath: null }
+  );
+  const activePath = activeState.activePath;
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
 
@@ -37,10 +44,10 @@ export function useFileTree(files: DemoFile[]) {
 
   const openFile = (path: string) => {
     expandTo(path);
-    setActivePath(path);
+    setActiveState({ activePath: path });
   };
 
-  const deselectFile = () => setActivePath(null);
+  const deselectFile = () => setActiveState({ activePath: null });
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

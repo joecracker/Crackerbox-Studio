@@ -36,6 +36,7 @@ import { useZenMode } from "./hooks/useZenMode";
 import { useFileTree } from "./hooks/useFileTree";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { useEdits } from "./hooks/useEdits";
+import { usePersistentState } from "./hooks/usePersistentState";
 import { useProjects } from "./hooks/useProjects";
 import type { Project } from "./hooks/useProjects";
 import {
@@ -147,7 +148,12 @@ export default function App() {
   } | null>(null);
   const paletteOpenRef = useRef(paletteOpen);
   paletteOpenRef.current = paletteOpen;
-  const [sidebarTab, setSidebarTab] = useState("chat");
+  const [sidebarTabState, setSidebarTabState] = usePersistentState<{ tab: string }>(
+    "crackerbox.sidebar.tab",
+    { tab: "chat" }
+  );
+  const sidebarTab = sidebarTabState.tab;
+  const setSidebarTab = (tab: string) => setSidebarTabState({ tab });
   const [projectDialog, setProjectDialog] = useState<
     { mode: "create" } | { mode: "rename"; id: string } | null
   >(null);
