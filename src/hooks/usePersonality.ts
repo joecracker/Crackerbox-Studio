@@ -11,7 +11,11 @@ const PERSONALITY_KEY = "crackerbox.personality";
 const DEFAULT_PERSONALITY: PersonalityState = {
   tone: "professional",
   verbosity: "balanced",
-  customInstructions: "",
+  customInstructions:
+    "You are working with a creative director, not a professional coder. " +
+    "Explain everything in plain, simple language — avoid jargon. " +
+    "Work one step at a time and wait for approval before moving to the next step. " +
+    "Before making any change that could be risky or hard to undo, explain what you are about to do first.",
 };
 
 const DEFAULT_BASE = "You are a helpful assistant.";
