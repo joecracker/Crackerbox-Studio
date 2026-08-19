@@ -68,12 +68,34 @@ import {
 } from "./utils/importer";
 import type { ImportResult } from "./utils/importer";
 
+function upsertNode(nodes: DemoFile[], segments: string[], content: string, prefix = ""): DemoFile[] {
+  const [head, ...rest] = segments;
+  const path = prefix ? `${prefix}/${head}` : head;
+  const existing = nodes.find((node) => node.name === head && node.path === path);
+  if (rest.length === 0) {
+    if (existing) return nodes.map((node) => (node === existing ? { ...node, content } : node));
+    return [...nodes, { name: head, type: "file", path, content }];
+  }
+  if (existing && existing.type === "folder") {
+    return nodes.map((node) =>
+      node === existing
+        ? { ...node, children: upsertNode(node.children ?? [], rest, content, path) }
+        : node
+    );
+  }
+  const folder: DemoFile = {
+    name: head,
+    type: "folder",
+    path,
+    children: upsertNode([], rest, content, path),
+  };
+  return nodes.map((node) => (node === existing ? folder : node)).concat(existing ? [] : [folder]);
+}
+
 function updateFileContent(nodes: DemoFile[], path: string, content: string): DemoFile[] {
-  return nodes.map((node) => {
-    if (node.path === path) return node.type === "file" ? { ...node, content } : node;
-    if (node.children) return { ...node, children: updateFileContent(node.children, path, content) };
-    return node;
-  });
+  const segments = path.split("/").filter(Boolean);
+  if (segments.length === 0) return nodes;
+  return upsertNode(nodes, segments, content);
 }
 
 function removeFileNode(nodes: DemoFile[], path: string): DemoFile[] {

@@ -114,6 +114,10 @@ export async function writeWorkspaceFile(
   if (!normalized.ok) return normalized;
   const path = containerPath(normalized.path);
   try {
+    const parent = path.slice(0, path.lastIndexOf("/"));
+    if (parent && parent !== path) {
+      await container.fs.mkdir(parent, { recursive: true });
+    }
     await container.fs.writeFile(path, content);
   } catch (e) {
     const message = e instanceof Error ? e.message : "write failed";
