@@ -1,5 +1,7 @@
 import { useRef, useState } from "react";
 import type { Project } from "../../hooks/useProjects";
+import type { ProjectSnapshot } from "../../hooks/useProjectStore";
+import type { SnapshotController } from "../../hooks/useSnapshots";
 import { flattenFiles } from "../../data/demoFiles";
 
 interface ProjectLibraryProps {
@@ -13,6 +15,11 @@ interface ProjectLibraryProps {
   onImportZip: (file: File) => void;
   onImportData: (data: DataTransfer) => void;
   notice: string | null;
+  snapshots: SnapshotController;
+  onCaptureSnapshot: (files: Project["files"], note?: string) => Promise<void>;
+  onRestoreSnapshot: (snapshot: ProjectSnapshot) => Promise<void>;
+  onDeleteSnapshot: (id: string) => Promise<void>;
+  onClearSnapshots: () => Promise<void>;
   driveConfigured: boolean;
   driveConnected: boolean;
   driveBusy: boolean;
@@ -35,6 +42,11 @@ export default function ProjectLibrary({
   onImportZip,
   onImportData,
   notice,
+  snapshots,
+  onCaptureSnapshot,
+  onRestoreSnapshot,
+  onDeleteSnapshot,
+  onClearSnapshots,
   driveConfigured,
   driveConnected,
   driveBusy,
@@ -47,6 +59,7 @@ export default function ProjectLibrary({
 }: ProjectLibraryProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const zipInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
 
@@ -103,6 +116,17 @@ export default function ProjectLibrary({
         </div>
         <button
           type="button"
+          onClick={() => setHistoryOpen((v) => !v)}
+          aria-expanded={historyOpen}
+          title="View and restore previous versions of this project"
+          className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
+            historyOpen ? "text-sky-300" : "text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          History
+        </button>
+        <button
+          type="button"
           onClick={onNew}
           className="rounded-md px-2 py-1 text-[11px] font-medium text-sky-400 transition-colors hover:bg-zinc-800 hover:text-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
         >
@@ -125,6 +149,88 @@ export default function ProjectLibrary({
       {notice && (
         <div className="mx-2 mb-1.5 rounded-md border border-sky-500/20 bg-sky-500/10 px-2.5 py-1.5 text-[11px] leading-relaxed text-sky-200">
           {notice}
+        </div>
+      )}
+      {historyOpen && (
+        <div className="mx-2 mb-2 overflow-hidden rounded-md border border-zinc-800">
+          <div className="flex items-center gap-2 border-b border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5">
+            <span className="flex-1 text-[11px] font-semibold text-zinc-300">Version history</span>
+            <button
+              type="button"
+              disabled={snapshots.capturing}
+              onClick={() => onCaptureSnapshot(projects.find((p) => p.id === activeProjectId)?.files ?? [], "manual")}
+              className="rounded border border-zinc-700 px-2 py-0.5 text-[10px] text-zinc-300 transition-colors hover:bg-zinc-800 disabled:opacity-50"
+            >
+              Snapshot now
+            </button>
+            {snapshots.snapshots.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm("Delete all saved versions of this project?")) {
+                    void onClearSnapshots();
+                  }
+                }}
+                className="rounded border border-zinc-800 px-2 py-0.5 text-[10px] text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-red-400"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <div className="max-h-52 overflow-y-auto bg-zinc-950/60">
+            {!snapshots.loaded ? (
+              <p className="px-3 py-2 text-[11px] text-zinc-500">Loading history…</p>
+            ) : snapshots.snapshots.length === 0 ? (
+              <p className="px-3 py-2 text-[11px] leading-relaxed text-zinc-500">
+                No versions saved yet. Cracker Box snapshots your project automatically as you work, or
+                click "Snapshot now" to save one yourself.
+              </p>
+            ) : (
+              snapshots.snapshots.map((snap, i) => (
+                <div
+                  key={snap.id}
+                  className={`flex items-center gap-2 px-2.5 py-1.5 ${
+                    i > 0 ? "border-t border-zinc-800/60" : ""
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-zinc-200">{snap.note === "auto" ? "Auto" : "Manual"}</span>
+                      {i === 0 && (
+                        <span className="rounded bg-emerald-500/15 px-1 py-px text-[9px] font-medium uppercase tracking-wider text-emerald-300">
+                          newest
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-zinc-500">
+                      {new Date(snap.createdAt).toLocaleString()}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm("Restore this version? Your current files will be replaced.")) {
+                        void onRestoreSnapshot(snap);
+                      }
+                    }}
+                    className="rounded border border-zinc-700 px-2 py-0.5 text-[10px] text-zinc-300 transition-colors hover:bg-zinc-800"
+                  >
+                    Restore
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void onDeleteSnapshot(snap.id)}
+                    aria-label={`Delete snapshot from ${new Date(snap.createdAt).toLocaleString()}`}
+                    className="flex h-5 w-5 items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-red-400"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path d="M3 4h10M6.5 4V2.5h3V4M4.5 4l.6 9h5.8l.6-9M6.5 7v3M9.5 7v3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       )}
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">

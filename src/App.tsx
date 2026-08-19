@@ -37,8 +37,10 @@ import { useFileTree } from "./hooks/useFileTree";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { useEdits } from "./hooks/useEdits";
 import { usePersistentState } from "./hooks/usePersistentState";
+import { useSnapshots, AUTO_DEBOUNCE_MS } from "./hooks/useSnapshots";
 import { useProjects } from "./hooks/useProjects";
 import type { Project } from "./hooks/useProjects";
+import type { ProjectSnapshot } from "./hooks/useProjectStore";
 import {
   driveConfigured,
   isDriveConnected,
@@ -163,6 +165,7 @@ export default function App() {
   const guardrails = useGuardrails();
   const webContainer = useWebContainer();
   const chat = useChatHistory(projects.activeProjectId);
+  const snapshots = useSnapshots(projects.activeProjectId);
   const activeFiles = projects.activeProject.files;
   const fileTree = useFileTree(activeFiles);
   const edits = useEdits();
@@ -171,6 +174,27 @@ export default function App() {
   const [mutationTick, setMutationTick] = useState(0);
   const [previewApproval, setPreviewApproval] = useState<PendingApproval | null>(null);
   const previewApprovalResolverRef = useRef<((approved: boolean) => void) | null>(null);
+
+  const autoCaptureTimerRef = useRef<number | null>(null);
+  const filesRef = useRef(activeFiles);
+  filesRef.current = activeFiles;
+
+  useEffect(() => {
+    if (!projects.hydrated) return;
+    if (autoCaptureTimerRef.current !== null) {
+      window.clearTimeout(autoCaptureTimerRef.current);
+    }
+    autoCaptureTimerRef.current = window.setTimeout(() => {
+      autoCaptureTimerRef.current = null;
+      snapshots.autoCapture(filesRef.current);
+    }, AUTO_DEBOUNCE_MS);
+    return () => {
+      if (autoCaptureTimerRef.current !== null) {
+        window.clearTimeout(autoCaptureTimerRef.current);
+        autoCaptureTimerRef.current = null;
+      }
+    };
+  }, [mutationTick, projects.hydrated, snapshots]);
 
   const persistFile = useMemo(
     () => (path: string, content: string) => {
@@ -199,6 +223,18 @@ export default function App() {
       // keep the last-good mirror if the read-back fails
     }
   }, [webContainer.container, projects]);
+
+  const restoreSnapshot = useCallback(
+    async (snapshot: ProjectSnapshot) => {
+      if (snapshot.projectId !== projects.activeProjectId) return;
+      projects.updateActiveFiles(() => snapshot.files);
+      setMutationTick((t) => t + 1);
+      if (webContainer.ready) {
+        await webContainer.reset(snapshot.files, snapshot.projectId);
+      }
+    },
+    [projects, webContainer]
+  );
 
   useEffect(() => {
     const key = projects.activeProjectId;
@@ -873,6 +909,11 @@ export default function App() {
                 onImportZip={handleImportZip}
                 onImportData={handleImportData}
                 notice={importNotice}
+                snapshots={snapshots}
+                onCaptureSnapshot={snapshots.capture}
+                onRestoreSnapshot={restoreSnapshot}
+                onDeleteSnapshot={snapshots.remove}
+                onClearSnapshots={snapshots.clear}
                 driveConfigured={driveConfigured}
                 driveConnected={driveConnected}
                 driveBusy={driveBusy}
