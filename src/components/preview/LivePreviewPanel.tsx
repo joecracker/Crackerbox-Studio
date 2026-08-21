@@ -27,6 +27,7 @@ interface LivePreviewPanelProps {
   detectedError?: DetectedPreviewError | null;
   onFixError?: () => void;
   onDismissError?: () => void;
+  preferStatic?: boolean;
 }
 
 function StatusPill({ status, srcDoc }: { status: PreviewStatus; srcDoc: string | null }) {
@@ -153,6 +154,7 @@ export default function LivePreviewPanel({
   detectedError,
   onFixError,
   onDismissError,
+  preferStatic = false,
 }: LivePreviewPanelProps) {
   const toolbar = usePreviewToolbar();
   const show = toolbar.visible;
@@ -335,6 +337,7 @@ export default function LivePreviewPanel({
             liveEpoch={liveEpoch}
             busy={busy}
             onRestart={onRestart}
+            preferStatic={preferStatic}
           />
         )}
         {approval && onApprove && onReject && (

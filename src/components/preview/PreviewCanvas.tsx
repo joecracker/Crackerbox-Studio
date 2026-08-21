@@ -8,6 +8,7 @@ interface PreviewCanvasProps {
   liveEpoch?: number;
   busy?: boolean;
   onRestart?: () => void;
+  preferStatic?: boolean;
 }
 
 export default function PreviewCanvas({
@@ -17,9 +18,11 @@ export default function PreviewCanvas({
   liveEpoch = 0,
   busy = false,
   onRestart,
+  preferStatic = false,
 }: PreviewCanvasProps) {
   const [nonce, setNonce] = useState(0);
-  const live = previewStatus === "live" && previewUrl !== null;
+  const live =
+    !preferStatic && previewStatus === "live" && previewUrl !== null;
   const iframeKey = `${liveEpoch}-${nonce}`;
 
   if (!live && !srcDoc) {

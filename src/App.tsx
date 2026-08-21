@@ -62,7 +62,7 @@ import type { PreviewApprovalRequest } from "./hooks/usePreviewRuntime";
 import { flattenFiles } from "./data/demoFiles";
 import type { DemoFile } from "./data/demoFiles";
 import { readTreeFromContainer, writeWorkspaceFile } from "./utils/workspaceWebContainer";
-import { extractPreview } from "./utils/preview";
+import { extractPreview, buildStaticPreview } from "./utils/preview";
 import { supportsVision } from "./data/models";
 import { formatBytes } from "./utils/workspace";
 import {
@@ -543,12 +543,18 @@ export default function App() {
   lastAssistantTextRef.current = lastAssistantText;
 
   const [previewDoc, setPreviewDoc] = useState<string | null>(null);
+  const staticFromFiles = useMemo(() => buildStaticPreview(activeFiles), [activeFiles]);
 
   useEffect(() => {
     if (chatStream.busy) return;
+    const fromFiles = staticFromFiles;
+    if (fromFiles) {
+      setPreviewDoc(fromFiles);
+      return;
+    }
     const src = lastAssistantTextRef.current;
     setPreviewDoc(src ? extractPreview(src) : null);
-  }, [chatStream.busy, projects.activeProjectId]);
+  }, [chatStream.busy, projects.activeProjectId, staticFromFiles]);
   const deselectFileRef = useRef<() => void>(() => {});
   deselectFileRef.current = fileTree.deselectFile;
 
@@ -1036,6 +1042,7 @@ export default function App() {
               detectedError={previewRuntime.detectedError}
               onFixError={handleFixError}
               onDismissError={previewRuntime.dismissError}
+              preferStatic={staticFromFiles !== null}
             />
           )}
         </div>
