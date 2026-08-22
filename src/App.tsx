@@ -49,6 +49,7 @@ import {
   restoreBackup,
 } from "./lib/backup";
 import { useTokenVault } from "./hooks/useTokenVault";
+import VaultUnlockDialog from "./components/vault/VaultUnlockDialog";
 import { usePersonality } from "./hooks/usePersonality";
 import { useGuardrails } from "./hooks/useGuardrails";
 import { useChatHistory } from "./hooks/useChatHistory";
@@ -336,6 +337,7 @@ export default function App() {
   const previewBrowser = usePreviewBrowser();
 
   const [importNotice, setImportNotice] = useState<string | null>(null);
+  const [vaultDismissed, setVaultDismissed] = useState(false);
   const importNoticeTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(importNoticeTimer.current), []);
 
@@ -888,6 +890,8 @@ export default function App() {
           parametersToggleRef={parametersToggleRef}
           terminalOpen={terminalOpen}
           onToggleTerminal={toggleTerminal}
+          previewCollapsed={previewCollapsed}
+          onTogglePreview={togglePreview}
         />
         <div className="flex min-h-0 flex-1">
           <FileTreePanel
@@ -1056,6 +1060,17 @@ export default function App() {
           />
         )}
       </div>
+        {!vaultDismissed && (
+          <VaultUnlockDialog
+            vault={vault}
+            onDismiss={() => setVaultDismissed(true)}
+            onGoDeploy={() => {
+              setSidebarTab("deploy");
+              if (sidebarCollapsed) handleToggleSidebar();
+              setVaultDismissed(true);
+            }}
+          />
+        )}
       {parametersOpen && (
         <ParametersDialog
           onClose={handleCloseParameters}

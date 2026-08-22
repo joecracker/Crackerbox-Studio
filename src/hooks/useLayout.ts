@@ -1,6 +1,6 @@
 import { usePersistentState } from "./usePersistentState";
 
-const LAYOUT_KEY = "crackerbox.layout";
+const LAYOUT_KEY = "crackerbox.layout.v2";
 
 export const SIDEBAR_MIN = 200;
 export const SIDEBAR_MAX = 720;
@@ -32,11 +32,11 @@ export interface LayoutState {
 
 const DEFAULT_LAYOUT: LayoutState = {
   sidebarWidth: 320,
-  sidebarCollapsed: false,
+  sidebarCollapsed: true,
   previewWidth: Math.round(window.innerWidth * PREVIEW_DEFAULT_RATIO),
   previewCollapsed: false,
   fileTreeWidth: 240,
-  fileTreeCollapsed: false,
+  fileTreeCollapsed: true,
   terminalOpen: false,
   terminalHeight: TERMINAL_DEFAULT,
 };

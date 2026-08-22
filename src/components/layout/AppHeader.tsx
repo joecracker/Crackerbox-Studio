@@ -13,6 +13,8 @@ interface AppHeaderProps {
   parametersToggleRef?: Ref<HTMLButtonElement>;
   terminalOpen: boolean;
   onToggleTerminal: () => void;
+  previewCollapsed: boolean;
+  onTogglePreview: () => void;
 }
 
 export default function AppHeader({
@@ -28,6 +30,8 @@ export default function AppHeader({
   parametersToggleRef,
   terminalOpen,
   onToggleTerminal,
+  previewCollapsed,
+  onTogglePreview,
 }: AppHeaderProps) {
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b border-zinc-800 bg-zinc-950 px-3">
@@ -60,6 +64,23 @@ export default function AppHeader({
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        onClick={onTogglePreview}
+        title="Toggle preview (Ctrl+Shift+P)"
+        aria-pressed={!previewCollapsed}
+        aria-label={previewCollapsed ? "Show preview" : "Hide preview"}
+        className="flex h-8 w-8 items-center justify-center rounded-md text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path
+            d="M1.5 4.25a1 1 0 0 1 1-1h3l1.2 1.5h6.3a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-10.5a1 1 0 0 1-1-1v-7.5Z"
+            stroke="currentColor"
+            strokeWidth="1.3"
+            strokeLinejoin="round"
+          />
         </svg>
       </button>
       <button
