@@ -158,6 +158,9 @@ export default function DeployWizard({
   const changedAtLabel = changedAt
     ? new Date(changedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : null;
+  const lastCheckAtLabel = settings.lastCheckAt
+    ? new Date(settings.lastCheckAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : null;
   const cardBlockedReason = !files.length
     ? "This project has no files to deploy."
     : !vault.unlocked
@@ -227,6 +230,8 @@ export default function DeployWizard({
           onDeployNow={onDeployQueued}
           busy={autoBusy || deploying}
           status={autoStatus}
+          lastCheckAtLabel={lastCheckAtLabel}
+          lastCheckNote={settings.lastCheckNote}
           canDeploy={canDeploy}
           blockedReason={cardBlockedReason}
         />

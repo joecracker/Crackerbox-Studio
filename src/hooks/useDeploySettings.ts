@@ -9,6 +9,8 @@ interface DeploySettingsState {
   siteName: string;
   repoPrivate: boolean;
   lastAutoDeployDate: string | null;
+  lastCheckAt: string | null;
+  lastCheckNote: string | null;
 }
 
 const KEY = "crackerbox.deploy.settings";
@@ -19,6 +21,8 @@ const DEFAULTS: DeploySettingsState = {
   siteName: "",
   repoPrivate: true,
   lastAutoDeployDate: null,
+  lastCheckAt: null,
+  lastCheckNote: null,
 };
 
 export interface DeploySettings {
@@ -27,9 +31,12 @@ export interface DeploySettings {
   siteName: string;
   repoPrivate: boolean;
   lastAutoDeployDate: string | null;
+  lastCheckAt: string | null;
+  lastCheckNote: string | null;
   setStrategy: (strategy: DeployStrategy) => void;
   saveTarget: (target: { repoName: string; siteName: string; repoPrivate: boolean }) => void;
   markAttempt: (dateKey: string) => void;
+  markCheck: (note: string) => void;
 }
 
 export function useDeploySettings(): DeploySettings {
@@ -56,14 +63,27 @@ export function useDeploySettings(): DeploySettings {
     [setState]
   );
 
+  const markCheck = useCallback(
+    (note: string) =>
+      setState((prev) =>
+        prev.lastCheckNote === note
+          ? prev
+          : { ...prev, lastCheckAt: new Date().toISOString(), lastCheckNote: note }
+      ),
+    [setState]
+  );
+
   return {
     strategy: state.strategy,
     repoName: state.repoName,
     siteName: state.siteName,
     repoPrivate: state.repoPrivate,
     lastAutoDeployDate: state.lastAutoDeployDate,
+    lastCheckAt: state.lastCheckAt,
+    lastCheckNote: state.lastCheckNote,
     setStrategy,
     saveTarget,
     markAttempt,
+    markCheck,
   };
 }

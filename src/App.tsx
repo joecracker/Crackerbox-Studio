@@ -362,11 +362,12 @@ export default function App() {
     const nfToken = vault.tokens.netlify;
     const files = projects.activeProject.files;
     if (!vault.unlocked || !ghToken || !nfToken || files.length === 0) {
-      setAutoDeployStatus(
+      const reason =
         files.length === 0
           ? "Nothing to deploy — this project has no files."
-          : "Skipped — unlock the vault in the Deploy tab to enable pushes."
-      );
+          : "Skipped — unlock the vault in the Deploy tab to enable pushes.";
+      setAutoDeployStatus(reason);
+      deploySettings.markCheck(reason);
       deploySettings.markAttempt(todayKey());
       return;
     }
@@ -392,10 +393,14 @@ export default function App() {
       );
       deployQueue.clearDirty(projects.activeProjectId);
       deploySettings.saveTarget(target);
+      const pushedNote = `Pushed ${files.length} file${files.length === 1 ? "" : "s"} · live at ${res.siteUrl}`;
+      deploySettings.markCheck(pushedNote);
       setAutoDeployStatus(
         `Pushed ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · live at ${res.siteUrl}`
       );
     } catch (e) {
+      const failedNote = e instanceof Error ? `Deploy failed: ${e.message}` : "Deploy failed";
+      deploySettings.markCheck(failedNote);
       setAutoDeployStatus(e instanceof Error ? e.message : "Deploy failed");
     } finally {
       deploySettings.markAttempt(todayKey());
@@ -428,19 +433,25 @@ export default function App() {
     if (deploySettings.strategy !== "midnight") return;
     const maybeFire = () => {
       const ctx = autoDeployCtxRef.current;
-      if (ctx.queue.count === 0) return;
       const today = todayKey();
       if (ctx.lastAutoDeployDate === today) return;
+      if (ctx.queue.count === 0) {
+        deploySettings.markCheck("Nothing pending — no push needed");
+        return;
+      }
       const hour = new Date().getHours();
       const overnight = hour < 6;
       const carryover = Object.values(ctx.queue.entries).some((iso) => iso.slice(0, 10) < today);
-      if (!overnight && !carryover) return;
+      if (!overnight && !carryover) {
+        deploySettings.markCheck("Changes pending — waiting for tonight's window");
+        return;
+      }
       void queuedDeployRef.current();
     };
     maybeFire();
     const timer = window.setInterval(maybeFire, 30_000);
     return () => window.clearInterval(timer);
-  }, [deploySettings.strategy]);
+  }, [deploySettings.strategy, deploySettings.markCheck]);
 
   // End-of-session batching: warn before closing with unsent edits. The queue
   // itself persists, so even a forced close carries the batch to next session.

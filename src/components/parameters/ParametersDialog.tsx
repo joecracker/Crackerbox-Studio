@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Model } from "../../data/models";
 import { describeModalities, supportsVision } from "../../data/models";
 import type { ParametersState } from "../../hooks/useParameters";
@@ -34,6 +34,17 @@ function ModelPicker({
           m.provider.toLowerCase().includes(q)
       )
     : list;
+
+  const groups = useMemo(() => {
+    const byProvider = new Map<string, Model[]>();
+    for (const m of filtered) {
+      const key = m.provider || "Other";
+      const bucket = byProvider.get(key);
+      if (bucket) bucket.push(m);
+      else byProvider.set(key, [m]);
+    }
+    return Array.from(byProvider.entries());
+  }, [filtered]);
 
   return (
     <div className="relative">
@@ -82,36 +93,50 @@ function ModelPicker({
               {filtered.length === 0 ? (
                 <p className="px-3 py-2 text-xs text-zinc-500">No matching models.</p>
               ) : (
-                filtered.map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => {
-                      onSelect(m.id);
-                      setOpen(false);
-                    }}
-                    title={describeModalities(m)}
-                    className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-zinc-800 ${
-                      m.id === selectedModelId ? "text-sky-400" : "text-zinc-200"
-                    }`}
-                  >
-                    <span className="min-w-0 truncate">
-                      <span className="font-medium">{m.name}</span>
-                      <span className="ml-1.5 text-zinc-500">{m.provider}</span>
-                    </span>
-                    <span className="flex shrink-0 items-center gap-1.5">
-                      {supportsVision(m) && (
-                        <span className="rounded-sm bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-400">
-                          vision
+                groups.map(([provider, models], groupIndex) => (
+                  <div key={provider}>
+                    {groupIndex > 0 && (
+                      <div className="mx-3 my-1 border-t border-zinc-800" />
+                    )}
+                    <div className="flex items-center gap-2 px-3 py-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                        {provider}
+                      </span>
+                      <span className="flex-1 border-t border-zinc-800" />
+                      <span className="text-[10px] text-zinc-600">{models.length}</span>
+                    </div>
+                    {models.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => {
+                          onSelect(m.id);
+                          setOpen(false);
+                        }}
+                        title={describeModalities(m)}
+                        className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-zinc-800 ${
+                          m.id === selectedModelId ? "text-sky-400" : "text-zinc-200"
+                        }`}
+                      >
+                        <span className="min-w-0 truncate">
+                          <span className="font-medium">{m.name}</span>
+                          <span className="ml-1.5 text-zinc-500">{m.provider}</span>
                         </span>
-                      )}
-                      {m.isFree && (
-                        <span className="rounded-sm bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
-                          Free
+                        <span className="flex shrink-0 items-center gap-1.5">
+                          {supportsVision(m) && (
+                            <span className="rounded-sm bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-400">
+                              vision
+                            </span>
+                          )}
+                          {m.isFree && (
+                            <span className="rounded-sm bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+                              Free
+                            </span>
+                          )}
                         </span>
-                      )}
-                    </span>
-                  </button>
+                      </button>
+                    ))}
+                  </div>
                 ))
               )}
             </div>
