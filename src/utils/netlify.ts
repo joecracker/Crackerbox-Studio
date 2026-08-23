@@ -23,6 +23,18 @@ export async function createSite(
   return (await res.json()) as { id: string; url: string; ssl_url: string };
 }
 
+/** Finds an existing site by exact name, or returns null when absent. */
+export async function getSiteByName(
+  token: string,
+  name: string
+): Promise<{ id: string; url: string; ssl_url: string } | null> {
+  const res = await netlifyFetch(token, `/sites?name=${encodeURIComponent(name)}`);
+  if (!res.ok) throw new Error(`Site lookup failed (${res.status})`);
+  const sites = (await res.json()) as Array<{ name: string; id: string; url: string; ssl_url: string }>;
+  const match = sites.find((s) => s.name === name);
+  return match ? { id: match.id, url: match.url, ssl_url: match.ssl_url } : null;
+}
+
 export async function createDeploy(
   token: string,
   siteId: string,

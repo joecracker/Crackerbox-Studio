@@ -48,6 +48,17 @@ export async function createRepo(
   return (await res.json()) as { full_name: string; html_url: string };
 }
 
+export async function getRepo(
+  token: string,
+  owner: string,
+  repo: string
+): Promise<{ full_name: string; html_url: string } | null> {
+  const res = await ghFetch(token, `/repos/${owner}/${repo}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Repo lookup failed (${res.status})`);
+  return (await res.json()) as { full_name: string; html_url: string };
+}
+
 export async function getFileSha(
   token: string,
   owner: string,
@@ -68,13 +79,14 @@ export async function uploadContentsFile(
   repo: string,
   path: string,
   content: string,
-  sha: string | null
+  sha: string | null,
+  message = `Deploy ${path}`
 ): Promise<void> {
   const res = await ghFetch(token, `/repos/${owner}/${repo}/contents/${encodePath(path)}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      message: `Deploy ${path}`,
+      message,
       content: utf8ToBase64(content),
       ...(sha ? { sha } : {}),
     }),

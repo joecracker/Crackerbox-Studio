@@ -50,6 +50,9 @@ import {
 } from "./lib/backup";
 import { useTokenVault } from "./hooks/useTokenVault";
 import VaultUnlockDialog from "./components/vault/VaultUnlockDialog";
+import { useDeployQueue } from "./hooks/useDeployQueue";
+import { useDeploySettings } from "./hooks/useDeploySettings";
+import { deployProject, slugify } from "./utils/deploy";
 import { usePersonality } from "./hooks/usePersonality";
 import { useGuardrails } from "./hooks/useGuardrails";
 import { useChatHistory } from "./hooks/useChatHistory";
@@ -113,6 +116,10 @@ function removeFileNode(nodes: DemoFile[], path: string): DemoFile[] {
   return next;
 }
 
+function todayKey(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export default function App() {
   const {
     sidebarWidth,
@@ -162,6 +169,8 @@ export default function App() {
   >(null);
   const projects = useProjects();
   const vault = useTokenVault();
+  const deployQueue = useDeployQueue();
+  const deploySettings = useDeploySettings();
   const personality = usePersonality();
   const guardrails = useGuardrails();
   const webContainer = useWebContainer();
@@ -200,17 +209,19 @@ export default function App() {
   const persistFile = useMemo(
     () => (path: string, content: string) => {
       projects.updateActiveFiles((prev) => updateFileContent(prev, path, content));
+      deployQueue.markDirty(projects.activeProjectId);
       setMutationTick((t) => t + 1);
     },
-    [projects]
+    [projects, deployQueue]
   );
 
   const removeFile = useMemo(
     () => (path: string) => {
       projects.updateActiveFiles((prev) => removeFileNode(prev, path));
+      deployQueue.markDirty(projects.activeProjectId);
       setMutationTick((t) => t + 1);
     },
-    [projects]
+    [projects, deployQueue]
   );
 
   const syncFromContainer = useCallback(async () => {
@@ -336,6 +347,115 @@ export default function App() {
 
   const previewBrowser = usePreviewBrowser();
 
+  const [autoDeploying, setAutoDeploying] = useState(false);
+  const [autoDeployStatus, setAutoDeployStatus] = useState<string | null>(null);
+  const autoDeployBusyRef = useRef(false);
+
+  /**
+   * Pushes the active project's accumulated changes in one batch. Safe to
+   * call repeatedly: guarded against concurrent runs, and marks the day as
+   * attempted either way so the nightly trigger fires at most once daily.
+   */
+  const runQueuedDeploy = useCallback(async () => {
+    if (autoDeployBusyRef.current) return;
+    const ghToken = vault.tokens.github;
+    const nfToken = vault.tokens.netlify;
+    const files = projects.activeProject.files;
+    if (!vault.unlocked || !ghToken || !nfToken || files.length === 0) {
+      setAutoDeployStatus(
+        files.length === 0
+          ? "Nothing to deploy — this project has no files."
+          : "Skipped — unlock the vault in the Deploy tab to enable pushes."
+      );
+      deploySettings.markAttempt(todayKey());
+      return;
+    }
+    autoDeployBusyRef.current = true;
+    setAutoDeploying(true);
+    try {
+      const target = {
+        repoName: slugify(deploySettings.repoName || projects.activeProject.name),
+        siteName: slugify(deploySettings.siteName || projects.activeProject.name),
+        repoPrivate: deploySettings.repoPrivate,
+      };
+      setAutoDeployStatus("Pushing accumulated changes…");
+      const res = await deployProject(
+        {
+          projectName: projects.activeProject.name,
+          files,
+          githubToken: ghToken,
+          netlifyToken: nfToken,
+          ...target,
+          label: `Cracker Box ${todayKey()}`,
+        },
+        (entry) => setAutoDeployStatus(entry.message)
+      );
+      deployQueue.clearDirty(projects.activeProjectId);
+      deploySettings.saveTarget(target);
+      setAutoDeployStatus(
+        `Pushed ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · live at ${res.siteUrl}`
+      );
+    } catch (e) {
+      setAutoDeployStatus(e instanceof Error ? e.message : "Deploy failed");
+    } finally {
+      deploySettings.markAttempt(todayKey());
+      autoDeployBusyRef.current = false;
+      setAutoDeploying(false);
+    }
+  }, [
+    vault,
+    projects.activeProject.files,
+    projects.activeProject.name,
+    projects.activeProjectId,
+    deploySettings,
+    deployQueue,
+  ]);
+  const queuedDeployRef = useRef(runQueuedDeploy);
+  queuedDeployRef.current = runQueuedDeploy;
+  const autoDeployCtxRef = useRef({
+    queue: deployQueue,
+    lastAutoDeployDate: deploySettings.lastAutoDeployDate,
+  });
+  autoDeployCtxRef.current = {
+    queue: deployQueue,
+    lastAutoDeployDate: deploySettings.lastAutoDeployDate,
+  };
+
+  // Nightly batching: once per day, when the overnight window opens (00:00–06:00)
+  // or on first launch still carrying changes from a previous day. An empty
+  // queue is a silent no-op, so idle days cost nothing.
+  useEffect(() => {
+    if (deploySettings.strategy !== "midnight") return;
+    const maybeFire = () => {
+      const ctx = autoDeployCtxRef.current;
+      if (ctx.queue.count === 0) return;
+      const today = todayKey();
+      if (ctx.lastAutoDeployDate === today) return;
+      const hour = new Date().getHours();
+      const overnight = hour < 6;
+      const carryover = Object.values(ctx.queue.entries).some((iso) => iso.slice(0, 10) < today);
+      if (!overnight && !carryover) return;
+      void queuedDeployRef.current();
+    };
+    maybeFire();
+    const timer = window.setInterval(maybeFire, 30_000);
+    return () => window.clearInterval(timer);
+  }, [deploySettings.strategy]);
+
+  // End-of-session batching: warn before closing with unsent edits. The queue
+  // itself persists, so even a forced close carries the batch to next session.
+  useEffect(() => {
+    if (deploySettings.strategy !== "session") return;
+    const handler = (e: BeforeUnloadEvent) => {
+      if (autoDeployCtxRef.current.queue.count > 0) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [deploySettings.strategy]);
+
   const [importNotice, setImportNotice] = useState<string | null>(null);
   const [vaultDismissed, setVaultDismissed] = useState(false);
   const importNoticeTimer = useRef<number | undefined>(undefined);
@@ -363,7 +483,8 @@ export default function App() {
       showImportNotice(result.error ?? "Folder import failed");
       return;
     }
-    projects.importProject(result.name ?? "Imported Project", result);
+    const importedId = projects.importProject(result.name ?? "Imported Project", result);
+    deployQueue.markDirty(importedId);
     showImportNotice(describeImport(result));
   }, [projects, describeImport, showImportNotice]);
 
@@ -374,7 +495,8 @@ export default function App() {
         showImportNotice(result.error ?? "Zip import failed");
         return;
       }
-      projects.importProject(result.name ?? "Imported Project", result);
+      const importedId = projects.importProject(result.name ?? "Imported Project", result);
+    deployQueue.markDirty(importedId);
       showImportNotice(describeImport(result));
     },
     [projects, describeImport, showImportNotice]
@@ -387,7 +509,8 @@ export default function App() {
         showImportNotice(result.error ?? "Import failed");
         return;
       }
-      projects.importProject(result.name ?? "Imported Project", result);
+      const importedId = projects.importProject(result.name ?? "Imported Project", result);
+    deployQueue.markDirty(importedId);
       showImportNotice(describeImport(result));
     },
     [projects, describeImport, showImportNotice]
@@ -954,9 +1077,19 @@ export default function App() {
             )}
             {sidebarTab === "deploy" && (
               <DeployWizard
+                projectId={projects.activeProjectId}
                 projectName={projects.activeProject.name}
                 files={projects.activeProject.files}
                 vault={vault}
+                queue={deployQueue}
+                settings={deploySettings}
+                autoBusy={autoDeploying}
+                autoStatus={autoDeployStatus}
+                onDeployQueued={() => void runQueuedDeploy()}
+                onDeploySuccess={(target) => {
+                  deploySettings.saveTarget(target);
+                  deployQueue.clearDirty(projects.activeProjectId);
+                }}
               />
             )}
             {sidebarTab === "settings" && (

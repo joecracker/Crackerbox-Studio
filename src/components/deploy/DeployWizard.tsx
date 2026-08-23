@@ -1,13 +1,23 @@
 import { useState } from "react";
 import type { DemoFile } from "../../data/demoFiles";
 import type { TokenVault } from "../../hooks/useTokenVault";
+import type { DeployQueue } from "../../hooks/useDeployQueue";
+import type { DeploySettings } from "../../hooks/useDeploySettings";
 import { deployProject, slugify } from "../../utils/deploy";
 import type { DeployLogEntry, DeployResult } from "../../utils/deploy";
+import PendingChangesCard from "./PendingChangesCard";
 
 interface DeployWizardProps {
+  projectId: string;
   projectName: string;
   files: DemoFile[];
   vault: TokenVault;
+  queue: DeployQueue;
+  settings: DeploySettings;
+  autoBusy: boolean;
+  autoStatus: string | null;
+  onDeployQueued: () => void;
+  onDeploySuccess: (target: { repoName: string; siteName: string; repoPrivate: boolean }) => void;
 }
 
 type Step = "accounts" | "configure" | "deploy";
@@ -112,15 +122,26 @@ function StepHeader({ step, current }: { step: Step; current: Step }) {
   );
 }
 
-export default function DeployWizard({ projectName, files, vault }: DeployWizardProps) {
+export default function DeployWizard({
+  projectId,
+  projectName,
+  files,
+  vault,
+  queue,
+  settings,
+  autoBusy,
+  autoStatus,
+  onDeployQueued,
+  onDeploySuccess,
+}: DeployWizardProps) {
   const [step, setStep] = useState<Step>("accounts");
   const [passphrase, setPassphrase] = useState("");
   const [passphraseConfirm, setPassphraseConfirm] = useState("");
   const [trustDevice, setTrustDevice] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
-  const [repoName, setRepoName] = useState(projectName);
-  const [repoPrivate, setRepoPrivate] = useState(true);
-  const [siteName, setSiteName] = useState(projectName);
+  const [repoName, setRepoName] = useState(settings.repoName || projectName);
+  const [repoPrivate, setRepoPrivate] = useState(settings.repoPrivate);
+  const [siteName, setSiteName] = useState(settings.siteName || projectName);
   const [log, setLog] = useState<DeployLogEntry[]>([]);
   const [deploying, setDeploying] = useState(false);
   const [deployError, setDeployError] = useState<string | null>(null);
@@ -131,6 +152,19 @@ export default function DeployWizard({ projectName, files, vault }: DeployWizard
   const canContinue =
     vault.unlocked && !!vault.tokens.github && !!vault.tokens.netlify;
   const canDeploy = canContinue && files.length > 0;
+
+  const activeDirty = queue.isDirty(projectId);
+  const changedAt = queue.changedAt(projectId);
+  const changedAtLabel = changedAt
+    ? new Date(changedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : null;
+  const cardBlockedReason = !files.length
+    ? "This project has no files to deploy."
+    : !vault.unlocked
+      ? "Unlock the vault first."
+      : !(vault.tokens.github && vault.tokens.netlify)
+        ? "Connect GitHub and Netlify tokens in step 1."
+        : null;
 
   const handleUnlock = () => {
     setSetupError(null);
@@ -155,10 +189,16 @@ export default function DeployWizard({ projectName, files, vault }: DeployWizard
           netlifyToken: vault.tokens.netlify ?? "",
           repoPrivate,
           siteName,
+          label: `Cracker Box ${new Date().toISOString().slice(0, 10)}`,
         },
         (entry) => setLog((prev) => [...prev, entry])
       );
       setResult(res);
+      onDeploySuccess({
+        repoName: slugify(repoName),
+        siteName: slugify(siteName),
+        repoPrivate,
+      });
     } catch (e) {
       setDeployError(e instanceof Error ? e.message : "Deploy failed");
     } finally {
@@ -177,6 +217,19 @@ export default function DeployWizard({ projectName, files, vault }: DeployWizard
           <StepHeader step="configure" current={step} />
           <StepHeader step="deploy" current={step} />
         </div>
+
+        <PendingChangesCard
+          visible
+          activeDirty={activeDirty}
+          changedAtLabel={changedAtLabel}
+          strategy={settings.strategy}
+          onStrategyChange={settings.setStrategy}
+          onDeployNow={onDeployQueued}
+          busy={autoBusy || deploying}
+          status={autoStatus}
+          canDeploy={canDeploy}
+          blockedReason={cardBlockedReason}
+        />
 
         {step === "accounts" &&
           (vault.unlocked ? (
