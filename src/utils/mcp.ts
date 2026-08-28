@@ -96,7 +96,16 @@ export class McpClient {
       payloadText = await res.text();
     }
 
-    const json = JSON.parse(payloadText) as JsonRpcResponse;
+    let json: JsonRpcResponse;
+    try {
+      json = JSON.parse(payloadText) as JsonRpcResponse;
+    } catch {
+      const preview = payloadText.trim().slice(0, 150);
+      throw new Error(
+        `Server returned non-JSON response (likely HTML login/error page). Response preview: "${preview}"`
+      );
+    }
+
     if (json.error) {
       throw new Error(json.error.message || `MCP error ${json.error.code}`);
     }
