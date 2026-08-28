@@ -2,6 +2,8 @@
 // Works entirely in the browser (fetch + SSE), which is the only way a web app can
 // reach a remote MCP server such as Home Assistant's.
 
+import JSON5 from "json5";
+
 export interface McpTool {
   name: string;
   description?: string;
@@ -32,22 +34,6 @@ async function readSseData(stream: ReadableStream<Uint8Array>): Promise<string> 
     reader.releaseLock();
   }
   return acc;
-}
-
-/** Robust JSON parser that handles unescaped newlines/control chars in tool descriptions. */
-function safeJsonParse(text: string): JsonRpcResponse {
-  try {
-    return JSON.parse(text) as JsonRpcResponse;
-  } catch {
-    // If strict parse fails due to unescaped control chars in strings, sanitize and retry
-    const sanitized = text.replace(/[\u0000-\u001F\u007F-\u009F]/g, (ch) => {
-      if (ch === "\n") return "\\n";
-      if (ch === "\r") return "\\r";
-      if (ch === "\t") return "\\t";
-      return "\\u" + ch.charCodeAt(0).toString(16).padStart(4, "0");
-    });
-    return JSON.parse(sanitized) as JsonRpcResponse;
-  }
 }
 
 /**
@@ -114,7 +100,7 @@ export class McpClient {
 
     let json: JsonRpcResponse;
     try {
-      json = safeJsonParse(payloadText);
+      json = JSON5.parse(payloadText) as JsonRpcResponse;
     } catch (e) {
       const preview = payloadText.trim().slice(0, 150);
       throw new Error(
