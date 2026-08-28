@@ -9,6 +9,7 @@ interface ProjectLibraryProps {
   activeProjectId: string;
   onSwitch: (id: string) => void;
   onNew: () => void;
+  onDashboardTemplate: () => void;
   onRename: (id: string) => void;
   onDelete: (id: string) => void;
   onImportFolder: () => void;
@@ -36,6 +37,7 @@ export default function ProjectLibrary({
   activeProjectId,
   onSwitch,
   onNew,
+  onDashboardTemplate,
   onRename,
   onDelete,
   onImportFolder,
@@ -131,6 +133,14 @@ export default function ProjectLibrary({
           className="rounded-md px-2 py-1 text-[11px] font-medium text-sky-400 transition-colors hover:bg-zinc-800 hover:text-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
         >
           + New
+        </button>
+        <button
+          type="button"
+          onClick={onDashboardTemplate}
+          title="Start a project from the Home Assistant dashboard template"
+          className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] font-medium text-emerald-300 transition-colors hover:border-emerald-600 hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+        >
+          Dashboard
         </button>
       </div>
       <input

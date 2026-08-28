@@ -244,6 +244,20 @@ export function useProjects() {
     [setMeta]
   );
 
+  const createFromFiles = useCallback(
+    (name: string, files: DemoFile[]): string => {
+      const id = createId();
+      setMeta((prev) => ({
+        projects: [...prev.projects, { id, name: name.trim() || "Project", origin: "import" }],
+        activeProjectId: id,
+      }));
+      setFilesMap((prev) => ({ ...prev, [id]: files }));
+      void idbSaveProjectFiles(id, files);
+      return id;
+    },
+    [setMeta]
+  );
+
   /**
    * Wholesale-replaces every project (metadata + files) — used by the Google
    * Drive / JSON backup restore flow. Preserves the original project ids so
@@ -282,6 +296,7 @@ export function useProjects() {
     switchProject,
     updateActiveFiles,
     importProject,
+    createFromFiles,
     restoreAll,
   };
 }

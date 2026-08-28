@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>My Home Dashboard</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="dot"></span>
+        <span id="clock">--:--</span>
+      </div>
+      <div class="conn" id="conn">connecting…</div>
+    </header>
+
+    <main class="grid">
+      <!-- stat cards -->
+      <section class="card" data-widget="temp">
+        <div class="card-label">Inside Temp</div>
+        <div class="card-value" id="temp">--°</div>
+      </section>
+      <section class="card" data-widget="humidity">
+        <div class="card-label">Humidity</div>
+        <div class="card-value" id="humidity">--%</div>
+      </section>
+      <section class="card" data-widget="energy">
+        <div class="card-label">Energy Today</div>
+        <div class="card-value" id="energy">-- kWh</div>
+      </section>
+
+      <!-- switches -->
+      <section class="card" data-widget="switches">
+        <div class="card-label">Switches</div>
+        <div class="switches" id="switches"></div>
+      </section>
+
+      <!-- thermostat mock -->
+      <section class="card" data-widget="thermostat">
+        <div class="card-label">Thermostat</div>
+        <div class="thermo">
+          <div class="thermo-temp" id="thermoTemp">21.0°</div>
+          <div class="thermo-row">
+            <button class="btn" id="thermoDown">−</button>
+            <button class="btn" id="thermoUp">+</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <p class="hint">
+      This is a standalone HTML dashboard. To connect it to Home Assistant, edit the
+      <code>CONFIG</code> object at the top of <code>app.js</code> with your HA URL and a
+      long-lived access token. Until then it shows demo data so the layout previews cleanly.
+    </p>
+
+    <script src="app.js"></script>
+  </body>
+</html>

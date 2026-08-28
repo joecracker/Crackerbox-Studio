@@ -7,6 +7,10 @@ import FileTreePanel from "./components/files/FileTreePanel";
 import FileViewer from "./components/files/FileViewer";
 import LivePreviewPanel from "./components/preview/LivePreviewPanel";
 import ProjectLibrary from "./components/projects/ProjectLibrary";
+import {
+  DASHBOARD_STARTER_NAME,
+  dashboardStarterFiles,
+} from "./data/dashboardStarter";
 import ProjectNameDialog from "./components/projects/ProjectNameDialog";
 import DeployWizard from "./components/deploy/DeployWizard";
 import PersonalitySettings from "./components/settings/PersonalitySettings";
@@ -1094,6 +1098,13 @@ export default function App() {
                 activeProjectId={projects.activeProjectId}
                 onSwitch={handleSwitchProject}
                 onNew={() => setProjectDialog({ mode: "create" })}
+                onDashboardTemplate={() => {
+                  const id = projects.createFromFiles(
+                    DASHBOARD_STARTER_NAME,
+                    dashboardStarterFiles.map((f) => ({ ...f }))
+                  );
+                  deployQueue.markDirty(id);
+                }}
                 onRename={handleRenameProject}
                 onDelete={projects.deleteProject}
                 onImportFolder={handleImportFolder}
