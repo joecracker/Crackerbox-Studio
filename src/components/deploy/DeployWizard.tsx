@@ -11,13 +11,20 @@ interface DeployWizardProps {
   projectId: string;
   projectName: string;
   files: DemoFile[];
+  hosted: boolean;
+  onToggleHosted: () => void;
   vault: TokenVault;
   queue: DeployQueue;
   settings: DeploySettings;
   autoBusy: boolean;
   autoStatus: string | null;
   onDeployQueued: () => void;
-  onDeploySuccess: (target: { repoName: string; siteName: string; repoPrivate: boolean }) => void;
+  onDeploySuccess: (target: {
+    repoName: string;
+    siteName: string;
+    repoPrivate: boolean;
+    cfAccountId: string;
+  }) => void;
 }
 
 type Step = "accounts" | "configure" | "deploy";
@@ -126,6 +133,8 @@ export default function DeployWizard({
   projectId,
   projectName,
   files,
+  hosted,
+  onToggleHosted,
   vault,
   queue,
   settings,
@@ -142,15 +151,18 @@ export default function DeployWizard({
   const [repoName, setRepoName] = useState(settings.repoName || projectName);
   const [repoPrivate, setRepoPrivate] = useState(settings.repoPrivate);
   const [siteName, setSiteName] = useState(settings.siteName || projectName);
+  const [cfAccountId, setCfAccountId] = useState(settings.cfAccountId);
   const [log, setLog] = useState<DeployLogEntry[]>([]);
   const [deploying, setDeploying] = useState(false);
   const [deployError, setDeployError] = useState<string | null>(null);
   const [result, setResult] = useState<DeployResult | null>(null);
 
   const hasStoredAny =
-    vault.hasStored("github") || vault.hasStored("netlify") || vault.hasStored("openrouter");
+    vault.hasStored("github") ||
+    vault.hasStored("cloudflare") ||
+    vault.hasStored("openrouter");
   const canContinue =
-    vault.unlocked && !!vault.tokens.github && !!vault.tokens.netlify;
+    vault.unlocked && !!vault.tokens.github && (!hosted || !!vault.tokens.cloudflare);
   const canDeploy = canContinue && files.length > 0;
 
   const activeDirty = queue.isDirty(projectId);
@@ -165,9 +177,11 @@ export default function DeployWizard({
     ? "This project has no files to deploy."
     : !vault.unlocked
       ? "Unlock the vault first."
-      : !(vault.tokens.github && vault.tokens.netlify)
-        ? "Connect GitHub and Netlify tokens in step 1."
-        : null;
+      : !vault.tokens.github
+        ? "Connect a GitHub token in step 1."
+        : hosted && !vault.tokens.cloudflare
+          ? "Connect a Cloudflare token in step 1."
+          : null;
 
   const handleUnlock = () => {
     setSetupError(null);
@@ -189,9 +203,11 @@ export default function DeployWizard({
           projectName,
           files,
           githubToken: vault.tokens.github ?? "",
-          netlifyToken: vault.tokens.netlify ?? "",
+          cloudflareToken: vault.tokens.cloudflare ?? "",
           repoPrivate,
           siteName,
+          cfAccountId: cfAccountId.trim(),
+          hosted,
           label: `Cracker Box ${new Date().toISOString().slice(0, 10)}`,
         },
         (entry) => setLog((prev) => [...prev, entry])
@@ -201,6 +217,7 @@ export default function DeployWizard({
         repoName: slugify(repoName),
         siteName: slugify(siteName),
         repoPrivate,
+        cfAccountId: cfAccountId.trim(),
       });
     } catch (e) {
       setDeployError(e instanceof Error ? e.message : "Deploy failed");
@@ -215,6 +232,28 @@ export default function DeployWizard({
         Deploy
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
+        <div className="mb-3 flex flex-col gap-2 rounded-md border border-zinc-800 bg-zinc-900/40 p-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-[11px] font-semibold text-zinc-300">
+                {hosted ? "Hosted app" : "Local (Home Assistant)"}
+              </div>
+              <div className="text-[10px] leading-snug text-zinc-500">
+                {hosted
+                  ? "Reached via a URL from outside your home network — deploys to Cloudflare Pages."
+                  : "Served by Home Assistant itself — GitHub backup only, no external host."}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onToggleHosted}
+              className="shrink-0 rounded-md border border-zinc-700 px-2 py-1 text-[10px] text-zinc-300 transition-colors hover:bg-zinc-800"
+            >
+              Switch to {hosted ? "local" : "hosted"}
+            </button>
+          </div>
+        </div>
+
         <div className="mb-3 flex flex-col gap-1.5">
           <StepHeader step="accounts" current={step} />
           <StepHeader step="configure" current={step} />
@@ -234,6 +273,7 @@ export default function DeployWizard({
           lastCheckNote={settings.lastCheckNote}
           canDeploy={canDeploy}
           blockedReason={cardBlockedReason}
+          hosted={hosted}
         />
 
         {step === "accounts" &&
@@ -248,12 +288,12 @@ export default function DeployWizard({
                 onRemove={() => vault.clearToken("github")}
               />
               <TokenField
-                label="Netlify token"
-                placeholder="nfp_…"
-                token={vault.tokens.netlify ?? ""}
-                hasToken={!!vault.tokens.netlify}
-                onSave={(value) => void vault.saveToken("netlify", value)}
-                onRemove={() => vault.clearToken("netlify")}
+                label="Cloudflare token"
+                placeholder="CF API token…"
+                token={vault.tokens.cloudflare ?? ""}
+                hasToken={!!vault.tokens.cloudflare}
+                onSave={(value) => void vault.saveToken("cloudflare", value)}
+                onRemove={() => vault.clearToken("cloudflare")}
               />
               <TokenField
                 label="OpenRouter API key (chat)"
@@ -265,7 +305,7 @@ export default function DeployWizard({
               />
               <p className="text-[11px] leading-relaxed text-zinc-600">
                 The OpenRouter key powers chat in this workspace. It is encrypted with the same
-                vault passphrase as your GitHub and Netlify tokens.
+                vault passphrase as your GitHub and Cloudflare tokens.
               </p>
               <button
                 type="button"
@@ -363,24 +403,49 @@ export default function DeployWizard({
               />
               Private repository
             </label>
-            <div>
-              <label
-                htmlFor="deploy-site"
-                className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500"
-              >
-                Netlify site name
-              </label>
-              <input
-                id="deploy-site"
-                value={siteName}
-                onChange={(e) => setSiteName(e.target.value)}
-                className="h-8 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2.5 text-sm text-zinc-100 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-              />
-            </div>
-            <p className="text-[11px] text-zinc-600">
-              Will use: <span className="text-zinc-400">{slugify(repoName)}</span> ·{" "}
-              <span className="text-zinc-400">{slugify(siteName)}</span>
-            </p>
+            {hosted ? (
+              <>
+                <div>
+                  <label
+                    htmlFor="deploy-cf-account"
+                    className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500"
+                  >
+                    Cloudflare account ID
+                  </label>
+                  <input
+                    id="deploy-cf-account"
+                    value={cfAccountId}
+                    onChange={(e) => setCfAccountId(e.target.value)}
+                    placeholder="e.g. 1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d"
+                    className="h-8 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2.5 text-sm text-zinc-100 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="deploy-site"
+                    className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500"
+                  >
+                    Cloudflare Pages project name
+                  </label>
+                  <input
+                    id="deploy-site"
+                    value={siteName}
+                    onChange={(e) => setSiteName(e.target.value)}
+                    className="h-8 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2.5 text-sm text-zinc-100 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                  />
+                </div>
+                <p className="text-[11px] text-zinc-600">
+                  Will use: <span className="text-zinc-400">{slugify(repoName)}</span> ·{" "}
+                  <span className="text-zinc-400">{slugify(siteName)}</span> (Cloudflare Pages)
+                </p>
+              </>
+            ) : (
+              <div className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-[11px] leading-relaxed text-zinc-500">
+                This is a <span className="text-zinc-300">local</span> project — Home Assistant
+                serves it itself, so no external host is configured. Only a GitHub repo is used,
+                as a backup and version history.
+              </div>
+            )}
             <div className="flex gap-2">
               <button
                 type="button"
@@ -403,14 +468,25 @@ export default function DeployWizard({
         {step === "deploy" && (
           <div className="flex flex-col gap-3">
             <p className="text-xs leading-relaxed text-zinc-400">
-              Push <span className="text-zinc-200">{projectName}</span> to a new GitHub repo and a
-              new Netlify site.
+              {hosted ? (
+                <>
+                  Push <span className="text-zinc-200">{projectName}</span> to a new GitHub repo and
+                  deploy it to Cloudflare Pages.
+                </>
+              ) : (
+                <>
+                  Push <span className="text-zinc-200">{projectName}</span> to a new GitHub repo for
+                  backup. No external host — Home Assistant serves it locally.
+                </>
+              )}
             </p>
             {!canDeploy && (
               <p className="text-xs text-amber-400">
                 {files.length === 0
                   ? "This project has no files to deploy."
-                  : "Connect and unlock both tokens in step 1."}
+                  : hosted
+                    ? "Connect and unlock both tokens in step 1."
+                    : "Connect and unlock a GitHub token in step 1."}
               </p>
             )}
             {!result && (
@@ -446,7 +522,9 @@ export default function DeployWizard({
             )}
             {result && (
               <div className="flex flex-col gap-1 rounded-md border border-zinc-800 bg-zinc-950 p-3 text-xs">
-                <p className="text-sm font-medium text-emerald-400">Deployed</p>
+                <p className="text-sm font-medium text-emerald-400">
+                  {hosted ? "Deployed" : "Backed up to GitHub"}
+                </p>
                 <a
                   href={result.repoUrl}
                   target="_blank"
@@ -455,14 +533,16 @@ export default function DeployWizard({
                 >
                   {result.repoUrl}
                 </a>
-                <a
-                  href={result.siteUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="truncate text-sky-400 hover:underline"
-                >
-                  {result.siteUrl}
-                </a>
+                {result.siteUrl && (
+                  <a
+                    href={result.siteUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="truncate text-sky-400 hover:underline"
+                  >
+                    {result.siteUrl}
+                  </a>
+                )}
               </div>
             )}
             <div className="flex gap-2">

@@ -3,19 +3,25 @@ import { usePersistentState } from "./usePersistentState";
 import { decryptToken, encryptToken } from "../utils/crypto";
 import type { EncryptedPayload } from "../utils/crypto";
 
-export type TokenService = "github" | "netlify" | "openrouter";
+export type TokenService = "github" | "netlify" | "openrouter" | "cloudflare";
 
 interface VaultState {
   github: EncryptedPayload | null;
   netlify: EncryptedPayload | null;
   openrouter: EncryptedPayload | null;
+  cloudflare: EncryptedPayload | null;
 }
 
 type TokenMap = Partial<Record<TokenService, string>>;
 
 const VAULT_KEY = "crackerbox.deploy.vault";
 const TRUSTED_KEY = "crackerbox.vault.trusted";
-const EMPTY_VAULT: VaultState = { github: null, netlify: null, openrouter: null };
+const EMPTY_VAULT: VaultState = {
+  github: null,
+  netlify: null,
+  openrouter: null,
+  cloudflare: null,
+};
 const TRUSTED_SENTINEL = "trusted";
 
 function hasAnyToken(map: TokenMap): boolean {
@@ -57,6 +63,7 @@ export function useTokenVault(): TokenVault {
       if (vault.github) result.github = await decryptToken(phrase, vault.github);
       if (vault.netlify) result.netlify = await decryptToken(phrase, vault.netlify);
       if (vault.openrouter) result.openrouter = await decryptToken(phrase, vault.openrouter);
+      if (vault.cloudflare) result.cloudflare = await decryptToken(phrase, vault.cloudflare);
       setPassphrase(phrase);
       setTokens(result);
       setTrustSession(trustThisDevice);

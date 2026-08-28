@@ -171,7 +171,9 @@ export default function App() {
   const sidebarTab = sidebarTabState.tab;
   const setSidebarTab = (tab: string) => setSidebarTabState({ tab });
   const [projectDialog, setProjectDialog] = useState<
-    { mode: "create" } | { mode: "rename"; id: string } | null
+    | { mode: "create"; initialName?: string; hosted?: boolean; files?: DemoFile[] }
+    | { mode: "rename"; id: string }
+    | null
   >(null);
   const projects = useProjects();
   const vault = useTokenVault();
@@ -368,13 +370,16 @@ export default function App() {
   const runQueuedDeploy = useCallback(async () => {
     if (autoDeployBusyRef.current) return;
     const ghToken = vault.tokens.github;
-    const nfToken = vault.tokens.netlify;
+    const cfToken = vault.tokens.cloudflare;
+    const hosted = projects.activeProject.hosted;
     const files = projects.activeProject.files;
-    if (!vault.unlocked || !ghToken || !nfToken || files.length === 0) {
+    if (!vault.unlocked || !ghToken || (hosted && !cfToken) || files.length === 0) {
       const reason =
         files.length === 0
           ? "Nothing to deploy — this project has no files."
-          : "Skipped — unlock the vault in the Deploy tab to enable pushes.";
+          : hosted
+            ? "Skipped — unlock the vault in the Deploy tab to enable pushes."
+            : "Skipped — connect a GitHub token in the Deploy tab.";
       setAutoDeployStatus(reason);
       deploySettings.markCheck(reason);
       deploySettings.markAttempt(todayKey());
@@ -387,25 +392,31 @@ export default function App() {
         repoName: slugify(deploySettings.repoName || projects.activeProject.name),
         siteName: slugify(deploySettings.siteName || projects.activeProject.name),
         repoPrivate: deploySettings.repoPrivate,
+        cfAccountId: deploySettings.cfAccountId,
       };
-      setAutoDeployStatus("Pushing accumulated changes…");
+      setAutoDeployStatus(hosted ? "Pushing accumulated changes…" : "Backing up to GitHub…");
       const res = await deployProject(
         {
           projectName: projects.activeProject.name,
           files,
           githubToken: ghToken,
-          netlifyToken: nfToken,
+          cloudflareToken: cfToken ?? "",
           ...target,
+          hosted,
           label: `Cracker Box ${todayKey()}`,
         },
         (entry) => setAutoDeployStatus(entry.message)
       );
       deployQueue.clearDirty(projects.activeProjectId);
       deploySettings.saveTarget(target);
-      const pushedNote = `Pushed ${files.length} file${files.length === 1 ? "" : "s"} · live at ${res.siteUrl}`;
+      const pushedNote = res.siteUrl
+        ? `Pushed ${files.length} file${files.length === 1 ? "" : "s"} · live at ${res.siteUrl}`
+        : `Backed up ${files.length} file${files.length === 1 ? "" : "s"} to GitHub`;
       deploySettings.markCheck(pushedNote);
       setAutoDeployStatus(
-        `Pushed ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · live at ${res.siteUrl}`
+        res.siteUrl
+          ? `Pushed ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · live at ${res.siteUrl}`
+          : `Backed up ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · GitHub only`
       );
     } catch (e) {
       const failedNote = e instanceof Error ? `Deploy failed: ${e.message}` : "Deploy failed";
@@ -421,6 +432,7 @@ export default function App() {
     projects.activeProject.files,
     projects.activeProject.name,
     projects.activeProjectId,
+    projects.activeProject.hosted,
     deploySettings,
     deployQueue,
   ]);
@@ -795,10 +807,18 @@ export default function App() {
     setProjectDialog({ mode: "rename", id });
   };
 
-  const handleSubmitProjectName = (name: string) => {
+  const handleSubmitProjectName = (name: string, hosted: boolean) => {
     if (!projectDialog) return;
-    if (projectDialog.mode === "create") projects.createProject(name);
-    else projects.renameProject(projectDialog.id, name);
+    if (projectDialog.mode === "create") {
+      if (projectDialog.files) {
+        const id = projects.createFromFiles(name, projectDialog.files.map((f) => ({ ...f })), hosted);
+        deployQueue.markDirty(id);
+      } else {
+        projects.createProject(name, hosted);
+      }
+    } else {
+      projects.renameProject(projectDialog.id, name);
+    }
     setProjectDialog(null);
   };
 
@@ -1097,14 +1117,15 @@ export default function App() {
                 projects={projects.projects}
                 activeProjectId={projects.activeProjectId}
                 onSwitch={handleSwitchProject}
-                onNew={() => setProjectDialog({ mode: "create" })}
-                onDashboardTemplate={() => {
-                  const id = projects.createFromFiles(
-                    DASHBOARD_STARTER_NAME,
-                    dashboardStarterFiles.map((f) => ({ ...f }))
-                  );
-                  deployQueue.markDirty(id);
-                }}
+                onNew={() => setProjectDialog({ mode: "create", initialName: "", hosted: true })}
+                onDashboardTemplate={() =>
+                  setProjectDialog({
+                    mode: "create",
+                    initialName: DASHBOARD_STARTER_NAME,
+                    hosted: false,
+                    files: dashboardStarterFiles,
+                  })
+                }
                 onRename={handleRenameProject}
                 onDelete={projects.deleteProject}
                 onImportFolder={handleImportFolder}
@@ -1132,6 +1153,10 @@ export default function App() {
                 projectId={projects.activeProjectId}
                 projectName={projects.activeProject.name}
                 files={projects.activeProject.files}
+                hosted={projects.activeProject.hosted}
+                onToggleHosted={() =>
+                  projects.setProjectHosted(projects.activeProjectId, !projects.activeProject.hosted)
+                }
                 vault={vault}
                 queue={deployQueue}
                 settings={deploySettings}
@@ -1306,8 +1331,10 @@ export default function App() {
           initialValue={
             projectDialog.mode === "rename"
               ? (projects.projects.find((p) => p.id === projectDialog.id)?.name ?? "")
-              : ""
+              : projectDialog.initialName ?? ""
           }
+          askHosting={projectDialog.mode === "create"}
+          initialHosted={projectDialog.mode === "create" ? projectDialog.hosted ?? true : true}
           onSubmit={handleSubmitProjectName}
           onClose={() => setProjectDialog(null)}
         />

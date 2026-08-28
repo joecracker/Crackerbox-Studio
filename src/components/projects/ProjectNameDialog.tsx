@@ -3,8 +3,10 @@ import { useEffect, useRef, useState } from "react";
 interface ProjectNameDialogProps {
   title: string;
   initialValue: string;
-  onSubmit: (name: string) => void;
+  onSubmit: (name: string, hosted: boolean) => void;
   onClose: () => void;
+  askHosting?: boolean;
+  initialHosted?: boolean;
 }
 
 export default function ProjectNameDialog({
@@ -12,8 +14,11 @@ export default function ProjectNameDialog({
   initialValue,
   onSubmit,
   onClose,
+  askHosting = false,
+  initialHosted = true,
 }: ProjectNameDialogProps) {
   const [name, setName] = useState(initialValue);
+  const [hosted, setHosted] = useState(initialHosted);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -23,7 +28,7 @@ export default function ProjectNameDialog({
 
   const submit = () => {
     if (!name.trim()) return;
-    onSubmit(name.trim());
+    onSubmit(name.trim(), hosted);
   };
 
   return (
@@ -61,6 +66,53 @@ export default function ProjectNameDialog({
             placeholder="Project name"
             className="h-9 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
           />
+          {askHosting && (
+            <div className="mt-4">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                Will this be opened from outside your home network?
+              </p>
+              <div className="flex flex-col gap-1.5">
+                <label
+                  className={`flex cursor-pointer items-start gap-2 rounded-md border px-2 py-1.5 transition-colors ${
+                    hosted ? "border-sky-600 bg-sky-500/10" : "border-zinc-800 hover:border-zinc-700"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="project-hosted"
+                    checked={hosted}
+                    onChange={() => setHosted(true)}
+                    className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-sky-500"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-xs font-medium text-zinc-200">Yes — hosted</span>
+                    <span className="block text-[11px] leading-snug text-zinc-500">
+                      Reached by anyone anywhere via a URL. Deploys to Cloudflare Pages.
+                    </span>
+                  </span>
+                </label>
+                <label
+                  className={`flex cursor-pointer items-start gap-2 rounded-md border px-2 py-1.5 transition-colors ${
+                    !hosted ? "border-sky-600 bg-sky-500/10" : "border-zinc-800 hover:border-zinc-700"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="project-hosted"
+                    checked={!hosted}
+                    onChange={() => setHosted(false)}
+                    className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-sky-500"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-xs font-medium text-zinc-200">No — local</span>
+                    <span className="block text-[11px] leading-snug text-zinc-500">
+                      Only Home Assistant loads it. GitHub backup only — no external host.
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </div>
+          )}
           <div className="mt-4 flex justify-end gap-2">
             <button
               type="button"

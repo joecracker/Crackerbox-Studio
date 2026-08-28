@@ -13,6 +13,7 @@ interface PendingChangesCardProps {
   lastCheckNote: string | null;
   canDeploy: boolean;
   blockedReason: string | null;
+  hosted: boolean;
 }
 
 const STRATEGY_OPTIONS: Array<{
@@ -50,6 +51,7 @@ export default function PendingChangesCard({
   lastCheckNote,
   canDeploy,
   blockedReason,
+  hosted,
 }: PendingChangesCardProps) {
   if (!visible) return null;
 
@@ -72,7 +74,7 @@ export default function PendingChangesCard({
 
       <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-500">
         {activeDirty
-          ? `This project has changes waiting to push${changedAtLabel ? ` since ${changedAtLabel}` : ""}. Edits keep piling up locally until the next deploy.`
+          ? `This project has changes waiting to push${changedAtLabel ? ` since ${changedAtLabel}` : ""}. Edits keep piling up locally until the next ${hosted ? "deploy" : "GitHub backup"}.`
           : "Every edit is already live — nothing is waiting to push."}
       </p>
 
@@ -112,7 +114,7 @@ export default function PendingChangesCard({
         title={!activeDirty ? "No changes waiting" : !canDeploy ? blockedReason ?? "" : undefined}
         className="mt-3 w-full rounded-md bg-emerald-500 px-3 py-1.5 text-xs font-medium text-zinc-950 transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {busy ? "Deploying…" : "Push all pending changes now"}
+        {busy ? "Deploying…" : hosted ? "Push all pending changes now" : "Back up to GitHub now"}
       </button>
       {!canDeploy && (
         <p className="mt-1 text-[11px] text-amber-400">{blockedReason}</p>
