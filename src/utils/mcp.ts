@@ -34,6 +34,22 @@ async function readSseData(stream: ReadableStream<Uint8Array>): Promise<string> 
   return acc;
 }
 
+/** Robust JSON parser that handles unescaped newlines/control chars in tool descriptions. */
+function safeJsonParse(text: string): JsonRpcResponse {
+  try {
+    return JSON.parse(text) as JsonRpcResponse;
+  } catch {
+    // If strict parse fails due to unescaped control chars in strings, sanitize and retry
+    const sanitized = text.replace(/[\u0000-\u001F\u007F-\u009F]/g, (ch) => {
+      if (ch === "\n") return "\\n";
+      if (ch === "\r") return "\\r";
+      if (ch === "\t") return "\\t";
+      return "\\u" + ch.charCodeAt(0).toString(16).padStart(4, "0");
+    });
+    return JSON.parse(sanitized) as JsonRpcResponse;
+  }
+}
+
 /**
  * A connection to an MCP server over Streamable HTTP.
  * Set `token` when the server expects an Authorization bearer token.
@@ -98,11 +114,11 @@ export class McpClient {
 
     let json: JsonRpcResponse;
     try {
-      json = JSON.parse(payloadText) as JsonRpcResponse;
-    } catch {
+      json = safeJsonParse(payloadText);
+    } catch (e) {
       const preview = payloadText.trim().slice(0, 150);
       throw new Error(
-        `Server returned non-JSON response (likely HTML login/error page). Response preview: "${preview}"`
+        `Failed to parse MCP response as JSON: ${e instanceof Error ? e.message : "parse error"}. Preview: "${preview}"`
       );
     }
 
