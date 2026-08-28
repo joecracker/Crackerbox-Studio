@@ -59,7 +59,7 @@ export default function IntegrationsSettings({ mcp, vault }: IntegrationsSetting
             <button
               type="button"
               onClick={() => void mcp.connect()}
-              disabled={mcp.connecting || !mcp.url.trim() || !hasToken}
+              disabled={mcp.connecting || !mcp.url.trim()}
               className="rounded-md bg-sky-500 px-3 py-1.5 text-xs font-medium text-zinc-950 transition-colors hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {mcp.connecting ? "Connecting…" : "Connect"}
@@ -68,10 +68,11 @@ export default function IntegrationsSettings({ mcp, vault }: IntegrationsSetting
         </div>
         {!hasToken && (
           <p className="mt-2 text-[11px] text-amber-400">
-            Add your Home Assistant long-lived token in Deploy → Connect accounts first.
+            If the server rejects the connection, add your Home Assistant long-lived token in
+            Deploy → Connect accounts and reconnect.
           </p>
         )}
-        {mcp.error && <p className="mt-2 text-[11px] text-red-400">{mcp.error}</p>}
+        {mcp.error && <p className="mt-2 break-words text-[11px] text-red-400">{mcp.error}</p>}
 
         {mcp.connected && (
           <div className="mt-3">

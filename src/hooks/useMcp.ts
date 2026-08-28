@@ -56,10 +56,6 @@ export function useMcp({ token }: UseMcpOptions): McpController {
       setError("Enter the Home Assistant MCP server URL first.");
       return false;
     }
-    if (!token) {
-      setError("Add your Home Assistant long-lived token in Deploy → Connect accounts first.");
-      return false;
-    }
     setConnecting(true);
     setError(null);
     try {
