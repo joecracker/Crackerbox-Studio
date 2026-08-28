@@ -1,5 +1,6 @@
 import type { DemoFile } from "../../data/demoFiles";
 import FileTree from "./FileTree";
+import type { RealFolderControls } from "../../hooks/useRealFolder";
 
 interface FileTreePanelProps {
   width: number;
@@ -14,6 +15,7 @@ interface FileTreePanelProps {
   onQueryChange: (query: string) => void;
   onContextMenuFile?: (path: string, x: number, y: number) => void;
   pendingPaths?: Set<string>;
+  realFolder?: RealFolderControls;
 }
 
 export default function FileTreePanel({
@@ -29,6 +31,7 @@ export default function FileTreePanel({
   onQueryChange,
   onContextMenuFile,
   pendingPaths,
+  realFolder,
 }: FileTreePanelProps) {
   return (
     <aside
@@ -48,6 +51,74 @@ export default function FileTreePanel({
         <header className="flex h-9 shrink-0 items-center gap-2 border-b border-zinc-800 px-3">
           <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Files</span>
         </header>
+        {realFolder && (
+          <div className="shrink-0 space-y-1.5 border-b border-zinc-800 px-2 py-2">
+            {realFolder.folderName && (
+              <div className="flex items-center gap-1.5 px-1">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path
+                    d="M2 4.5A1.5 1.5 0 0 1 3.5 3h2.2l1.3 1.5h5.5A1.5 1.5 0 0 1 14 6v5.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5v-7Z"
+                    stroke="currentColor"
+                    strokeWidth="1.2"
+                  />
+                </svg>
+                <span className="min-w-0 flex-1 truncate text-[11px] text-sky-300">{realFolder.folderName}</span>
+                <button
+                  type="button"
+                  onClick={realFolder.unlink}
+                  title="Unlink folder"
+                  aria-label="Unlink folder"
+                  className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-700 hover:text-zinc-100"
+                >
+                  <svg width="9" height="9" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  </svg>
+                </button>
+              </div>
+            )}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => void realFolder.link()}
+                disabled={realFolder.loading}
+                title="Open a real folder from your computer"
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-300 transition-colors hover:border-sky-600 hover:text-sky-300 disabled:opacity-50"
+              >
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path
+                    d="M2 4.5A1.5 1.5 0 0 1 3.5 3h2.2l1.3 1.5h5.5A1.5 1.5 0 0 1 14 6v5.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5v-7Z"
+                    stroke="currentColor"
+                    strokeWidth="1.2"
+                  />
+                </svg>
+                {realFolder.loading ? "Opening…" : realFolder.folderName ? "Reopen folder" : "Open folder"}
+              </button>
+              {realFolder.folderName && (
+                <button
+                  type="button"
+                  onClick={() => void realFolder.save()}
+                  disabled={realFolder.saving}
+                  title="Save all files back to the linked folder on your computer"
+                  className="flex shrink-0 items-center gap-1.5 rounded-md border border-emerald-700 bg-emerald-600/10 px-2 py-1 text-[11px] text-emerald-300 transition-colors hover:bg-emerald-600/20 disabled:opacity-50"
+                >
+                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path
+                      d="M4 2h6l2 2v10H4V2Z"
+                      stroke="currentColor"
+                      strokeWidth="1.2"
+                      strokeLinejoin="round"
+                    />
+                    <path d="M6 2v3h4V2" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+                  </svg>
+                  {realFolder.saving ? "Saving…" : "Save"}
+                </button>
+              )}
+            </div>
+            {realFolder.error && (
+              <p className="px-1 text-[10px] text-red-400">{realFolder.error}</p>
+            )}
+          </div>
+        )}
         <div className="shrink-0 px-2 py-2">
           <input
             type="search"

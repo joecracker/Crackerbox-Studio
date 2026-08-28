@@ -13,6 +13,8 @@ interface ChatViewProps {
   activeSessionId: string | null;
   onSelectSession: (id: string) => void;
   onCreateSession: () => void;
+  onRenameSession: (id: string) => void;
+  onDeleteSession: (id: string) => void;
   onSend: (text: string, attachments: ChatMessage["attachments"]) => void;
   onOpenParameters: () => void;
   streaming: boolean;
@@ -43,6 +45,8 @@ export default function ChatView({
   activeSessionId,
   onSelectSession,
   onCreateSession,
+  onRenameSession,
+  onDeleteSession,
   onSend,
   onOpenParameters,
   streaming,
@@ -76,6 +80,8 @@ export default function ChatView({
         activeSessionId={activeSessionId}
         onSelect={onSelectSession}
         onCreate={onCreateSession}
+        onRename={onRenameSession}
+        onDelete={onDeleteSession}
       />
       {contextPercent !== null && contextPercent >= 0 && contextLevel !== "ok" && contextLevel !== "unknown" && (
         <div className="pt-2">

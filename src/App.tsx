@@ -59,6 +59,7 @@ import { useChatHistory } from "./hooks/useChatHistory";
 import type { ChatAttachment } from "./hooks/useChatHistory";
 import { useChatStream } from "./hooks/useChatStream";
 import { useContextGuard } from "./hooks/useContextGuard";
+import { useRealFolder } from "./hooks/useRealFolder";
 import type { PendingApproval } from "./hooks/useChatStream";
 import { useWebContainer } from "./hooks/useWebContainer";
 import { usePreviewRuntime } from "./hooks/usePreviewRuntime";
@@ -676,6 +677,13 @@ export default function App() {
     onSelectSession: chat.selectSession,
   });
 
+  const realFolder = useRealFolder({
+    activeProjectId: projects.activeProjectId,
+    activeFiles,
+    updateActiveFiles: projects.updateActiveFiles,
+    markDirty: deployQueue.markDirty,
+  });
+
   const sendBlockedReason = !parameters.selectedModelId
     ? "No model selected — open Parameters (Ctrl+Shift+,) to pick one."
     : !vault.unlocked
@@ -1062,6 +1070,7 @@ export default function App() {
             onQueryChange={fileTree.setQuery}
             onContextMenuFile={handleFileContextMenu}
             pendingPaths={pendingPaths}
+            realFolder={realFolder}
           />
           {!fileTreeCollapsed && (
             <PanelResizer
@@ -1162,6 +1171,16 @@ export default function App() {
                 activeSessionId={chat.activeSessionId}
                 onSelectSession={chat.selectSession}
                 onCreateSession={() => chat.createSession()}
+                onRenameSession={(id) => {
+                  const current = chat.sessions.find((s) => s.id === id);
+                  const name = window.prompt("Rename session", current?.title ?? "");
+                  if (name && name.trim()) chat.renameSession(id, name.trim());
+                }}
+                onDeleteSession={(id) => {
+                  if (window.confirm("Delete this chat session? This cannot be undone.")) {
+                    chat.deleteSession(id);
+                  }
+                }}
                 onSend={handleChatSend}
                 onOpenParameters={() => setParametersOpen(true)}
                 contextLevel={contextGuard.level}

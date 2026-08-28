@@ -1,9 +1,10 @@
 import type { DemoFile } from "../data/demoFiles";
 
 const DB_NAME = "crackerbox";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE = "project-files";
 const SNAP_STORE = "project-snapshots";
+const HANDLE_STORE = "folder-handles";
 
 export interface ProjectSnapshot {
   id: string;
@@ -25,6 +26,9 @@ function openDb(): Promise<IDBDatabase> {
       }
       if (!req.result.objectStoreNames.contains(SNAP_STORE)) {
         req.result.createObjectStore(SNAP_STORE);
+      }
+      if (!req.result.objectStoreNames.contains(HANDLE_STORE)) {
+        req.result.createObjectStore(HANDLE_STORE);
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -96,6 +100,38 @@ export async function idbSaveSnapshots(projectId: string, snaps: ProjectSnapshot
 export async function idbDeleteSnapshots(projectId: string): Promise<void> {
   try {
     await run<undefined>(SNAP_STORE, "readwrite", (store) => store.delete(projectId));
+  } catch {
+    // ignore
+  }
+}
+
+export async function idbSaveFolderHandle(
+  projectId: string,
+  handle: FileSystemDirectoryHandle
+): Promise<void> {
+  try {
+    await run<IDBValidKey>(HANDLE_STORE, "readwrite", (store) => store.put(handle, projectId));
+  } catch {
+    // handle persistence unavailable — in-memory only this session
+  }
+}
+
+export async function idbLoadFolderHandle(
+  projectId: string
+): Promise<FileSystemDirectoryHandle | null> {
+  try {
+    const result = await run<FileSystemDirectoryHandle | undefined>(HANDLE_STORE, "readonly", (store) =>
+      store.get(projectId)
+    );
+    return result ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function idbDeleteFolderHandle(projectId: string): Promise<void> {
+  try {
+    await run<undefined>(HANDLE_STORE, "readwrite", (store) => store.delete(projectId));
   } catch {
     // ignore
   }
