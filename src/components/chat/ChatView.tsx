@@ -4,6 +4,7 @@ import Composer from "./Composer";
 import MessageList from "./MessageList";
 import ApprovalCard from "./ApprovalCard";
 import SessionSwitcher from "./SessionSwitcher";
+import ContextBanner from "./ContextBanner";
 
 interface ChatViewProps {
   projectName: string;
@@ -27,6 +28,12 @@ interface ChatViewProps {
   onApprovalReply: (text: string) => "resolved" | "ambiguous";
   runtimeAvailable: boolean;
   runtimeError: string | null;
+  contextLevel: "ok" | "soft" | "hard" | "unknown";
+  contextPercent: number | null;
+  contextBusy: boolean;
+  contextError: string | null;
+  contextModel: string | null;
+  onStartHandoff: () => void;
 }
 
 export default function ChatView({
@@ -51,6 +58,12 @@ export default function ChatView({
   onApprovalReply,
   runtimeAvailable,
   runtimeError,
+  contextLevel,
+  contextPercent,
+  contextBusy,
+  contextError,
+  contextModel,
+  onStartHandoff,
 }: ChatViewProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -64,6 +77,18 @@ export default function ChatView({
         onSelect={onSelectSession}
         onCreate={onCreateSession}
       />
+      {contextPercent !== null && contextPercent >= 0 && contextLevel !== "ok" && contextLevel !== "unknown" && (
+        <div className="pt-2">
+          <ContextBanner
+            level={contextLevel as "soft" | "hard"}
+            percent={contextPercent}
+            onStart={onStartHandoff}
+            busy={contextBusy}
+            error={contextError}
+            model={contextModel}
+          />
+        </div>
+      )}
       <MessageList key={activeSessionId ?? "session"} messages={messages} streaming={streaming} />
       {!runtimeAvailable && (
         <div className="mx-4 mb-2 flex items-start gap-2 rounded-md border border-amber-900/60 bg-amber-950/40 px-3 py-2">

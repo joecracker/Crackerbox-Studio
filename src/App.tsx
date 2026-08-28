@@ -58,6 +58,7 @@ import { useGuardrails } from "./hooks/useGuardrails";
 import { useChatHistory } from "./hooks/useChatHistory";
 import type { ChatAttachment } from "./hooks/useChatHistory";
 import { useChatStream } from "./hooks/useChatStream";
+import { useContextGuard } from "./hooks/useContextGuard";
 import type { PendingApproval } from "./hooks/useChatStream";
 import { useWebContainer } from "./hooks/useWebContainer";
 import { usePreviewRuntime } from "./hooks/usePreviewRuntime";
@@ -264,7 +265,9 @@ export default function App() {
     activeProjectId: projects.activeProjectId,
     messages: chat.messages,
     model: parameters.selectedModelId,
-    systemPrompt: personality.composePrompt(parameters.systemPrompt),
+    systemPrompt: chat.activeSession?.summary
+      ? `${personality.composePrompt(parameters.systemPrompt)}\n\n## Archived session summary\n${chat.activeSession.summary}`
+      : personality.composePrompt(parameters.systemPrompt),
     temperature: parameters.temperature,
     maxTokens: parameters.maxTokens,
     getApiKey: () => (vault.unlocked ? vault.tokens.openrouter ?? null : null),
@@ -281,6 +284,7 @@ export default function App() {
     removeAssistant: chat.removeAssistant,
     setAssistantToolCalls: chat.setAssistantToolCalls,
     patchAssistantToolCall: chat.patchAssistantToolCall,
+    onUsage: (prompt, completion) => chat.addUsage(prompt, completion),
   });
   const requestPreviewApproval = useCallback(
     (pending: PreviewApprovalRequest): Promise<boolean> =>
@@ -654,6 +658,23 @@ export default function App() {
       : parameters.selectedModelId
     : null;
   const visionSupported = selectedModel ? supportsVision(selectedModel) : false;
+
+  useEffect(() => {
+    if (chat.activeSessionId && selectedModel) {
+      chat.setSessionModel(chat.activeSessionId, selectedModel.id, selectedModel.contextLength);
+    }
+  }, [chat.activeSessionId, selectedModel, chat.setSessionModel]);
+
+  const contextGuard = useContextGuard({
+    session: chat.activeSession,
+    projectName: projects.activeProject.name,
+    models: modelSource.models,
+    currentModelId: parameters.selectedModelId,
+    apiKey: vault.unlocked ? vault.tokens.openrouter ?? null : null,
+    onSummarized: chat.setSessionSummary,
+    onCreateSession: (title?: string) => chat.createSession(title),
+    onSelectSession: chat.selectSession,
+  });
 
   const sendBlockedReason = !parameters.selectedModelId
     ? "No model selected — open Parameters (Ctrl+Shift+,) to pick one."
@@ -1143,6 +1164,12 @@ export default function App() {
                 onCreateSession={() => chat.createSession()}
                 onSend={handleChatSend}
                 onOpenParameters={() => setParametersOpen(true)}
+                contextLevel={contextGuard.level}
+                contextPercent={contextGuard.percent}
+                contextBusy={contextGuard.handingOff}
+                contextError={contextGuard.handoffError}
+                contextModel={contextGuard.handoffModel}
+                onStartHandoff={() => void contextGuard.startHandoff()}
                 streaming={chatStream.busy}
                 sendDisabled={sendBlockedReason !== null}
                 sendDisabledReason={sendBlockedReason}
@@ -1172,7 +1199,7 @@ export default function App() {
             )}
             <footer className="flex h-10 shrink-0 items-center justify-between border-t border-zinc-800 px-4 text-xs text-zinc-500">
               <span>Cracker Box — your AI dev workspace</span>
-              <TokenCounter />
+              <TokenCounter count={contextGuard.tokenCount} />
             </footer>
           </main>
           {!previewCollapsed && (

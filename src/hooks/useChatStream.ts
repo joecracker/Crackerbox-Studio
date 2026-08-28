@@ -251,6 +251,7 @@ export interface ChatStreamOptions {
     callId: string,
     patch: ChatToolCallPartial
   ) => void;
+  onUsage?: (prompt: number, completion: number) => void;
 }
 
 export interface ChatStreamResult {
@@ -393,6 +394,17 @@ interface ToolCallDraft {
   arguments: string;
 }
 
+function extractUsage(json: unknown): { prompt: number; completion: number } | null {
+  if (!json || typeof json !== "object") return null;
+  const usage = (json as Record<string, unknown>).usage;
+  if (!usage || typeof usage !== "object") return null;
+  const u = usage as Record<string, unknown>;
+  const prompt = typeof u.prompt_tokens === "number" ? u.prompt_tokens : 0;
+  const completion = typeof u.completion_tokens === "number" ? u.completion_tokens : 0;
+  if (prompt === 0 && completion === 0) return null;
+  return { prompt, completion };
+}
+
 function createToolCallId(): string {
   return `call_${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -507,6 +519,7 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
         removeAssistant,
         setAssistantToolCalls,
         patchAssistantToolCall,
+        onUsage,
       } = optionsRef.current;
 
       const guardError = !model
@@ -542,8 +555,17 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
       let toolsEnabled = true;
       let toolMessagesPushed = false;
       let toolIterations = 0;
+      let accPrompt = 0;
+      let accCompletion = 0;
 
       const finish = (result: ChatStreamResult): ChatStreamResult => {
+        if (accPrompt > 0 || accCompletion > 0) {
+          try {
+            onUsage?.(accPrompt, accCompletion);
+          } catch {
+            // usage reporting is best-effort
+          }
+        }
         if (abortRef.current === controller) abortRef.current = null;
         busyRef.current = false;
         setBusy(false);
@@ -657,6 +679,7 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
               stream: true,
               temperature,
               max_tokens: maxTokens,
+              stream_options: { include_usage: true },
               ...(toolsEnabled
                 ? { tools: toolsFor(webContainer, webContainerAvailable), tool_choice: "auto" as const }
                 : {}),
@@ -718,6 +741,11 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
                 }
                 const err = extractError(json);
                 if (err) throw new Error(err);
+                const usage = extractUsage(json);
+                if (usage) {
+                  accPrompt += usage.prompt;
+                  accCompletion += usage.completion;
+                }
                 const delta = extractDelta(json);
                 if (delta.content) {
                   turnText += delta.content;

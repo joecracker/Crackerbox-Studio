@@ -122,11 +122,14 @@ export function useChatHistory(activeProjectId: string) {
     (updater: (project: ProjectSessions) => ProjectSessions) => {
       setRawByProject((prev) => {
         const migrated = migrateShape(prev) as PersistedShape;
-        const current = updater(migrated[activeProjectId] ?? project);
+        const existing = migrated[activeProjectId];
+        const base: ProjectSessions =
+          existing ?? { sessions: [freshSession()], activeSessionId: null };
+        const current = updater(base);
         return { ...migrated, [activeProjectId]: current };
       });
     },
-    [activeProjectId, project, setRawByProject]
+    [activeProjectId, setRawByProject]
   );
 
   const sessions = project.sessions;
