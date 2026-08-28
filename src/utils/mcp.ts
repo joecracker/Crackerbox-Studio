@@ -20,15 +20,27 @@ interface JsonRpcResponse {
 async function readSseData(stream: ReadableStream<Uint8Array>): Promise<string> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
+  let buffer = "";
   let acc = "";
   try {
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
-      const text = decoder.decode(value, { stream: true });
-      for (const line of text.split("\n")) {
-        if (line.startsWith("data:")) acc += line.slice(5).trim();
+      if (done) {
+        buffer += decoder.decode();
+        break;
       }
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith("data:")) {
+          acc += trimmed.slice(5).trim();
+        }
+      }
+    }
+    if (buffer.trim().startsWith("data:")) {
+      acc += buffer.trim().slice(5).trim();
     }
   } finally {
     reader.releaseLock();
@@ -96,6 +108,13 @@ export class McpClient {
       payloadText = await readSseData(res.body as ReadableStream<Uint8Array>);
     } else {
       payloadText = await res.text();
+      if (payloadText.trim().startsWith("data:")) {
+        payloadText = payloadText
+          .split(/\r?\n/)
+          .filter((line) => line.trim().startsWith("data:"))
+          .map((line) => line.trim().slice(5).trim())
+          .join("");
+      }
     }
 
     let json: JsonRpcResponse;
