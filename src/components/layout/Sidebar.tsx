@@ -121,7 +121,7 @@ export default function Sidebar({
             );
           })}
         </nav>
-        <div className="min-h-0 flex-1 overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {children ?? (
             <div className="flex h-full flex-col justify-end border-t border-zinc-800 px-3 py-3 text-xs leading-relaxed text-zinc-500">
               Chat, deploy, and settings land next.
