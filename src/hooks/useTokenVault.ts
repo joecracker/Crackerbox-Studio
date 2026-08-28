@@ -3,13 +3,14 @@ import { usePersistentState } from "./usePersistentState";
 import { decryptToken, encryptToken } from "../utils/crypto";
 import type { EncryptedPayload } from "../utils/crypto";
 
-export type TokenService = "github" | "netlify" | "openrouter" | "cloudflare";
+export type TokenService = "github" | "netlify" | "openrouter" | "cloudflare" | "homeassistant";
 
 interface VaultState {
   github: EncryptedPayload | null;
   netlify: EncryptedPayload | null;
   openrouter: EncryptedPayload | null;
   cloudflare: EncryptedPayload | null;
+  homeassistant: EncryptedPayload | null;
 }
 
 type TokenMap = Partial<Record<TokenService, string>>;
@@ -21,6 +22,7 @@ const EMPTY_VAULT: VaultState = {
   netlify: null,
   openrouter: null,
   cloudflare: null,
+  homeassistant: null,
 };
 const TRUSTED_SENTINEL = "trusted";
 
@@ -64,6 +66,7 @@ export function useTokenVault(): TokenVault {
       if (vault.netlify) result.netlify = await decryptToken(phrase, vault.netlify);
       if (vault.openrouter) result.openrouter = await decryptToken(phrase, vault.openrouter);
       if (vault.cloudflare) result.cloudflare = await decryptToken(phrase, vault.cloudflare);
+      if (vault.homeassistant) result.homeassistant = await decryptToken(phrase, vault.homeassistant);
       setPassphrase(phrase);
       setTokens(result);
       setTrustSession(trustThisDevice);

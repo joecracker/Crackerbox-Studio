@@ -160,7 +160,8 @@ export default function DeployWizard({
   const hasStoredAny =
     vault.hasStored("github") ||
     vault.hasStored("cloudflare") ||
-    vault.hasStored("openrouter");
+    vault.hasStored("openrouter") ||
+    vault.hasStored("homeassistant");
   const canContinue =
     vault.unlocked && !!vault.tokens.github && (!hosted || !!vault.tokens.cloudflare);
   const canDeploy = canContinue && files.length > 0;
@@ -302,6 +303,14 @@ export default function DeployWizard({
                 hasToken={!!vault.tokens.openrouter}
                 onSave={(value) => void vault.saveToken("openrouter", value)}
                 onRemove={() => vault.clearToken("openrouter")}
+              />
+              <TokenField
+                label="Home Assistant token (MCP)"
+                placeholder="long-lived token…"
+                token={vault.tokens.homeassistant ?? ""}
+                hasToken={!!vault.tokens.homeassistant}
+                onSave={(value) => void vault.saveToken("homeassistant", value)}
+                onRemove={() => vault.clearToken("homeassistant")}
               />
               <p className="text-[11px] leading-relaxed text-zinc-600">
                 The OpenRouter key powers chat in this workspace. It is encrypted with the same

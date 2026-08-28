@@ -67,7 +67,7 @@ type PayloadMessage =
   | { role: "system" | "user" | "assistant"; content: PayloadContent; tool_calls?: ToolCallPayload[] }
   | PayloadToolMessage;
 
-interface ToolDefinition {
+export interface ToolDefinition {
   type: "function";
   function: {
     name: string;
@@ -252,6 +252,10 @@ export interface ChatStreamOptions {
     patch: ChatToolCallPartial
   ) => void;
   onUsage?: (prompt: number, completion: number) => void;
+  /** Extra tools (e.g. from MCP integrations) merged into every request. */
+  extraTools?: ToolDefinition[];
+  /** Dispatches a call to an extra/external tool. Returns the text result. */
+  callExternalTool?: (name: string, args: Record<string, unknown>) => Promise<string>;
 }
 
 export interface ChatStreamResult {
@@ -520,6 +524,8 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
         setAssistantToolCalls,
         patchAssistantToolCall,
         onUsage,
+        extraTools,
+        callExternalTool,
       } = optionsRef.current;
 
       const guardError = !model
@@ -681,7 +687,10 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
               max_tokens: maxTokens,
               stream_options: { include_usage: true },
               ...(toolsEnabled
-                ? { tools: toolsFor(webContainer, webContainerAvailable), tool_choice: "auto" as const }
+                ? {
+                    tools: [...toolsFor(webContainer, webContainerAvailable), ...(extraTools ?? [])],
+                    tool_choice: "auto" as const,
+                  }
                 : {}),
             }),
             signal: controller.signal,
@@ -937,6 +946,25 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
             patchAssistantToolCall(assistantId, call.id, { status, result: resultText });
             pushToolResult(call.id, resultText);
             void refreshTree();
+            continue;
+          }
+
+          const external = (extraTools ?? []).some((t) => t.function.name === call.name);
+          if (external && callExternalTool) {
+            patchAssistantToolCall(assistantId, call.id, { status: "running", result: undefined });
+            let contentText: string;
+            let ok = true;
+            try {
+              contentText = await callExternalTool(call.name, parseArgs(call.arguments));
+            } catch (e) {
+              ok = false;
+              contentText = e instanceof Error ? e.message : "External tool call failed.";
+            }
+            patchAssistantToolCall(assistantId, call.id, {
+              status: ok ? "done" : "error",
+              result: contentText,
+            });
+            pushToolResult(call.id, contentText);
             continue;
           }
 

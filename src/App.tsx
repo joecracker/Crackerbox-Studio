@@ -15,6 +15,7 @@ import ProjectNameDialog from "./components/projects/ProjectNameDialog";
 import DeployWizard from "./components/deploy/DeployWizard";
 import PersonalitySettings from "./components/settings/PersonalitySettings";
 import GuardrailSettings from "./components/settings/GuardrailSettings";
+import IntegrationsSettings from "./components/settings/IntegrationsSettings";
 import ChatView from "./components/chat/ChatView";
 import TerminalPanel from "./components/terminal/TerminalPanel";
 import ParametersDialog from "./components/parameters/ParametersDialog";
@@ -64,6 +65,7 @@ import type { ChatAttachment } from "./hooks/useChatHistory";
 import { useChatStream } from "./hooks/useChatStream";
 import { useContextGuard } from "./hooks/useContextGuard";
 import { useRealFolder } from "./hooks/useRealFolder";
+import { useMcp } from "./hooks/useMcp";
 import type { PendingApproval } from "./hooks/useChatStream";
 import { useWebContainer } from "./hooks/useWebContainer";
 import { usePreviewRuntime } from "./hooks/usePreviewRuntime";
@@ -179,6 +181,7 @@ export default function App() {
   const vault = useTokenVault();
   const deployQueue = useDeployQueue();
   const deploySettings = useDeploySettings();
+  const mcp = useMcp({ token: vault.tokens.homeassistant ?? null });
   const personality = usePersonality();
   const guardrails = useGuardrails();
   const webContainer = useWebContainer();
@@ -292,6 +295,8 @@ export default function App() {
     setAssistantToolCalls: chat.setAssistantToolCalls,
     patchAssistantToolCall: chat.patchAssistantToolCall,
     onUsage: (prompt, completion) => chat.addUsage(prompt, completion),
+    extraTools: mcp.toolDefinitions,
+    callExternalTool: (name, args) => mcp.callTool(name, args),
   });
   const requestPreviewApproval = useCallback(
     (pending: PreviewApprovalRequest): Promise<boolean> =>
@@ -1178,6 +1183,7 @@ export default function App() {
                 <div className="px-3 pb-4">
                   <GuardrailSettings guardrails={guardrails} />
                 </div>
+                <IntegrationsSettings mcp={mcp} vault={vault} />
               </>
             )}
           </Sidebar>
