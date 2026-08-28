@@ -1,12 +1,17 @@
-import type { ChatMessage } from "../../hooks/useChatHistory";
+import type { ChatMessage, ChatSession } from "../../hooks/useChatHistory";
 import type { PendingApproval } from "../../hooks/useChatStream";
 import Composer from "./Composer";
 import MessageList from "./MessageList";
 import ApprovalCard from "./ApprovalCard";
+import SessionSwitcher from "./SessionSwitcher";
 
 interface ChatViewProps {
   projectName: string;
   messages: ChatMessage[];
+  sessions: ChatSession[];
+  activeSessionId: string | null;
+  onSelectSession: (id: string) => void;
+  onCreateSession: () => void;
   onSend: (text: string, attachments: ChatMessage["attachments"]) => void;
   onOpenParameters: () => void;
   streaming: boolean;
@@ -27,6 +32,10 @@ interface ChatViewProps {
 export default function ChatView({
   projectName,
   messages,
+  sessions,
+  activeSessionId,
+  onSelectSession,
+  onCreateSession,
   onSend,
   onOpenParameters,
   streaming,
@@ -49,7 +58,13 @@ export default function ChatView({
         <span className="truncate text-xs font-medium text-zinc-300">{projectName}</span>
         <span className="ml-auto shrink-0 text-[11px] text-zinc-600">chat</span>
       </div>
-      <MessageList messages={messages} streaming={streaming} />
+      <SessionSwitcher
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        onSelect={onSelectSession}
+        onCreate={onCreateSession}
+      />
+      <MessageList key={activeSessionId ?? "session"} messages={messages} streaming={streaming} />
       {!runtimeAvailable && (
         <div className="mx-4 mb-2 flex items-start gap-2 rounded-md border border-amber-900/60 bg-amber-950/40 px-3 py-2">
           <p className="min-w-0 flex-1 text-[11px] leading-relaxed text-amber-300">

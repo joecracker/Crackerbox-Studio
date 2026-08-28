@@ -1137,6 +1137,10 @@ export default function App() {
                 key={projects.activeProjectId}
                 projectName={projects.activeProject.name}
                 messages={chat.messages}
+                sessions={chat.sessions}
+                activeSessionId={chat.activeSessionId}
+                onSelectSession={chat.selectSession}
+                onCreateSession={() => chat.createSession()}
                 onSend={handleChatSend}
                 onOpenParameters={() => setParametersOpen(true)}
                 streaming={chatStream.busy}
