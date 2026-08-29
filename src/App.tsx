@@ -397,7 +397,6 @@ export default function App() {
         repoName: slugify(deploySettings.repoName || projects.activeProject.name),
         siteName: slugify(deploySettings.siteName || projects.activeProject.name),
         repoPrivate: deploySettings.repoPrivate,
-        cfAccountId: deploySettings.cfAccountId,
       };
       setAutoDeployStatus(hosted ? "Pushing accumulated changes…" : "Backing up to GitHub…");
       const res = await deployProject(

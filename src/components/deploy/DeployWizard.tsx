@@ -23,7 +23,6 @@ interface DeployWizardProps {
     repoName: string;
     siteName: string;
     repoPrivate: boolean;
-    cfAccountId: string;
   }) => void;
 }
 
@@ -151,7 +150,6 @@ export default function DeployWizard({
   const [repoName, setRepoName] = useState(settings.repoName || projectName);
   const [repoPrivate, setRepoPrivate] = useState(settings.repoPrivate);
   const [siteName, setSiteName] = useState(settings.siteName || projectName);
-  const [cfAccountId, setCfAccountId] = useState(settings.cfAccountId);
   const [log, setLog] = useState<DeployLogEntry[]>([]);
   const [deploying, setDeploying] = useState(false);
   const [deployError, setDeployError] = useState<string | null>(null);
@@ -159,11 +157,9 @@ export default function DeployWizard({
 
   const hasStoredAny =
     vault.hasStored("github") ||
-    vault.hasStored("cloudflare") ||
     vault.hasStored("openrouter") ||
     vault.hasStored("homeassistant");
-  const canContinue =
-    vault.unlocked && !!vault.tokens.github && (!hosted || !!vault.tokens.cloudflare);
+  const canContinue = vault.unlocked && !!vault.tokens.github;
   const canDeploy = canContinue && files.length > 0;
 
   const activeDirty = queue.isDirty(projectId);
@@ -216,7 +212,6 @@ export default function DeployWizard({
         repoName: slugify(repoName),
         siteName: slugify(siteName),
         repoPrivate,
-        cfAccountId: cfAccountId.trim(),
       });
     } catch (e) {
       setDeployError(e instanceof Error ? e.message : "Deploy failed");
@@ -287,14 +282,6 @@ export default function DeployWizard({
                 onRemove={() => vault.clearToken("github")}
               />
               <TokenField
-                label="Cloudflare token"
-                placeholder="CF API token…"
-                token={vault.tokens.cloudflare ?? ""}
-                hasToken={!!vault.tokens.cloudflare}
-                onSave={(value) => void vault.saveToken("cloudflare", value)}
-                onRemove={() => vault.clearToken("cloudflare")}
-              />
-              <TokenField
                 label="OpenRouter API key (chat)"
                 placeholder="sk-or-v1-…"
                 token={vault.tokens.openrouter ?? ""}
@@ -311,8 +298,8 @@ export default function DeployWizard({
                 onRemove={() => vault.clearToken("homeassistant")}
               />
               <p className="text-[11px] leading-relaxed text-zinc-600">
-                The OpenRouter key powers chat in this workspace. It is encrypted with the same
-                vault passphrase as your GitHub and Cloudflare tokens.
+                The OpenRouter key powers chat in this workspace. Tokens are encrypted with your
+                vault passphrase.
               </p>
               <button
                 type="button"
@@ -414,21 +401,6 @@ export default function DeployWizard({
               <>
                 <div>
                   <label
-                    htmlFor="deploy-cf-account"
-                    className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500"
-                  >
-                    Cloudflare account ID
-                  </label>
-                  <input
-                    id="deploy-cf-account"
-                    value={cfAccountId}
-                    onChange={(e) => setCfAccountId(e.target.value)}
-                    placeholder="e.g. 1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d"
-                    className="h-8 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2.5 text-sm text-zinc-100 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                  />
-                </div>
-                <div>
-                  <label
                     htmlFor="deploy-site"
                     className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500"
                   >
@@ -442,8 +414,7 @@ export default function DeployWizard({
                   />
                 </div>
                 <p className="text-[11px] text-zinc-600">
-                  Will use: <span className="text-zinc-400">{slugify(repoName)}</span> ·{" "}
-                  <span className="text-zinc-400">{slugify(siteName)}</span> (Cloudflare Pages)
+                  Will use repo: <span className="text-zinc-400">{slugify(repoName)}</span> (Cloudflare Pages auto-deploys from GitHub)
                 </p>
               </>
             ) : (

@@ -8,7 +8,6 @@ interface DeploySettingsState {
   repoName: string;
   siteName: string;
   repoPrivate: boolean;
-  cfAccountId: string;
   lastAutoDeployDate: string | null;
   lastCheckAt: string | null;
   lastCheckNote: string | null;
@@ -21,7 +20,6 @@ const DEFAULTS: DeploySettingsState = {
   repoName: "",
   siteName: "",
   repoPrivate: true,
-  cfAccountId: "",
   lastAutoDeployDate: null,
   lastCheckAt: null,
   lastCheckNote: null,
@@ -32,17 +30,11 @@ export interface DeploySettings {
   repoName: string;
   siteName: string;
   repoPrivate: boolean;
-  cfAccountId: string;
   lastAutoDeployDate: string | null;
   lastCheckAt: string | null;
   lastCheckNote: string | null;
   setStrategy: (strategy: DeployStrategy) => void;
-  saveTarget: (target: {
-    repoName: string;
-    siteName: string;
-    repoPrivate: boolean;
-    cfAccountId: string;
-  }) => void;
+  saveTarget: (target: { repoName: string; siteName: string; repoPrivate: boolean }) => void;
   markAttempt: (dateKey: string) => void;
   markCheck: (note: string) => void;
 }
@@ -60,14 +52,12 @@ export function useDeploySettings(): DeploySettings {
       repoName: string;
       siteName: string;
       repoPrivate: boolean;
-      cfAccountId: string;
     }) =>
       setState((prev) => ({
         ...prev,
         repoName: target.repoName,
         siteName: target.siteName,
         repoPrivate: target.repoPrivate,
-        cfAccountId: target.cfAccountId,
       })),
     [setState]
   );
@@ -92,7 +82,6 @@ export function useDeploySettings(): DeploySettings {
     repoName: state.repoName,
     siteName: state.siteName,
     repoPrivate: state.repoPrivate,
-    cfAccountId: state.cfAccountId,
     lastAutoDeployDate: state.lastAutoDeployDate,
     lastCheckAt: state.lastCheckAt,
     lastCheckNote: state.lastCheckNote,
