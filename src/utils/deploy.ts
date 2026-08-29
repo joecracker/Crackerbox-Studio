@@ -8,15 +8,9 @@ import {
   getRepo,
   uploadContentsFile,
 } from "./github";
-import {
-  createPagesProject,
-  deployToPages,
-  getPagesProject,
-  pollPagesDeployment,
-} from "./cloudflare";
 
 export interface DeployLogEntry {
-  step: "prepare" | "github" | "cloudflare" | "done";
+  step: "prepare" | "github" | "done";
   message: string;
   ok?: boolean;
 }
@@ -30,11 +24,8 @@ export interface DeployInput {
   projectName: string;
   files: DemoFile[];
   githubToken: string;
-  cloudflareToken: string;
   repoPrivate: boolean;
   siteName: string;
-  cfAccountId: string;
-  /** true = needs an external host (Cloudflare Pages); false = served locally by Home Assistant (GitHub backup only). */
   hosted: boolean;
   /** Prefix for the git commit messages created by this push. */
   label?: string;
@@ -49,14 +40,13 @@ export function slugify(name: string): string {
 }
 
 /**
- * Pushes a project to GitHub + (when hosted) Cloudflare Pages. Idempotent:
- * if the repo or Pages project already exists they are reused, so repeated
- * runs act as updates rather than creating duplicates. Every file upload is
- * its own git commit tagged with `label`, giving you a per-push checkpoint
- * trail in GitHub history.
+ * Pushes a project to GitHub. Idempotent: if the repo already exists it is
+ * reused, so repeated runs act as updates rather than creating duplicates.
+ * Every file upload is its own git commit tagged with `label`, giving you
+ * a per-push checkpoint trail in GitHub history.
  *
- * Non-hosted (local) projects only push to GitHub for backup — Home Assistant
- * serves them itself, so no external host is used.
+ * For hosted projects, pushing to GitHub automatically triggers Cloudflare Pages.
+ * For local projects, GitHub serves as a secure backup for Home Assistant.
  */
 export async function deployProject(
   input: DeployInput,
@@ -100,8 +90,6 @@ export async function deployProject(
     });
   }
 
-  let siteUrl: string | null = null;
-
   if (!input.hosted) {
     onLog({
       step: "done",
@@ -111,33 +99,11 @@ export async function deployProject(
     return { repoUrl: repo.html_url, siteUrl: null };
   }
 
-  onLog({ step: "cloudflare", message: `Checking Cloudflare Pages project "${siteName}"` });
-  let project = await getPagesProject(input.cloudflareToken, input.cfAccountId, siteName);
-  if (project) {
-    onLog({ step: "cloudflare", message: "Reusing existing Pages project", ok: true });
-  } else {
-    project = await createPagesProject(input.cloudflareToken, input.cfAccountId, siteName);
-    onLog({ step: "cloudflare", message: `Created Pages project "${siteName}"`, ok: true });
-  }
-
-  onLog({ step: "cloudflare", message: "Uploading deploy archive" });
-  const deployment = await deployToPages(
-    input.cloudflareToken,
-    input.cfAccountId,
-    siteName,
-    input.files
-  );
-
-  onLog({ step: "cloudflare", message: "Waiting for the build" });
-  const result = await pollPagesDeployment(
-    input.cloudflareToken,
-    input.cfAccountId,
-    siteName,
-    deployment.id
-  );
-
-  siteUrl = result.url ?? deployment.url;
-  onLog({ step: "done", message: `Live at ${siteUrl}`, ok: true });
+  const siteUrl = `https://${siteName}.pages.dev`;
+  onLog({
+    step: "done",
+    message: `Pushed to GitHub! Cloudflare Pages is auto-deploying your site at ${siteUrl}`,
+    ok: true,
+  });
   return { repoUrl: repo.html_url, siteUrl };
 }
-
