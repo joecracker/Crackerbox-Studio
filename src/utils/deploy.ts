@@ -53,7 +53,6 @@ export async function deployProject(
   onLog: (entry: DeployLogEntry) => void
 ): Promise<DeployResult> {
   const repoName = slugify(input.projectName);
-  const siteName = slugify(input.siteName);
   const label = input.label ?? "Deploy";
   const files = flattenFiles(input.files).filter((f) => f.content != null);
 
@@ -99,11 +98,10 @@ export async function deployProject(
     return { repoUrl: repo.html_url, siteUrl: null };
   }
 
-  const siteUrl = `https://${siteName}.pages.dev`;
   onLog({
     step: "done",
-    message: `Pushed to GitHub! Cloudflare Pages is auto-deploying your site at ${siteUrl}`,
+    message: "Pushed to GitHub! Connect this repo in Cloudflare Pages (one time) to go live — then every push auto-deploys.",
     ok: true,
   });
-  return { repoUrl: repo.html_url, siteUrl };
+  return { repoUrl: repo.html_url, siteUrl: null };
 }

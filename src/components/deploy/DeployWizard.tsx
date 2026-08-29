@@ -149,7 +149,6 @@ export default function DeployWizard({
   const [setupError, setSetupError] = useState<string | null>(null);
   const [repoName, setRepoName] = useState(settings.repoName || projectName);
   const [repoPrivate, setRepoPrivate] = useState(settings.repoPrivate);
-  const [siteName, setSiteName] = useState(settings.siteName || projectName);
   const [log, setLog] = useState<DeployLogEntry[]>([]);
   const [deploying, setDeploying] = useState(false);
   const [deployError, setDeployError] = useState<string | null>(null);
@@ -192,6 +191,7 @@ export default function DeployWizard({
     setDeployError(null);
     setResult(null);
     setLog([]);
+    const repoSlug = slugify(repoName);
     try {
       const res = await deployProject(
         {
@@ -199,7 +199,7 @@ export default function DeployWizard({
           files,
           githubToken: vault.tokens.github ?? "",
           repoPrivate,
-          siteName,
+          siteName: repoSlug,
           hosted,
           label: `Cracker Box ${new Date().toISOString().slice(0, 10)}`,
         },
@@ -207,8 +207,8 @@ export default function DeployWizard({
       );
       setResult(res);
       onDeploySuccess({
-        repoName: slugify(repoName),
-        siteName: slugify(siteName),
+        repoName: repoSlug,
+        siteName: repoSlug,
         repoPrivate,
       });
     } catch (e) {
@@ -397,23 +397,12 @@ export default function DeployWizard({
             </label>
             {hosted ? (
               <>
-                <div>
-                  <label
-                    htmlFor="deploy-site"
-                    className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500"
-                  >
-                    Cloudflare Pages project name
-                  </label>
-                  <input
-                    id="deploy-site"
-                    value={siteName}
-                    onChange={(e) => setSiteName(e.target.value)}
-                    className="h-8 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2.5 text-sm text-zinc-100 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                  />
+                <div className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-[11px] leading-relaxed text-zinc-500">
+                  This is a <span className="text-zinc-300">hosted</span> app. Cracker Box pushes it to
+                  GitHub as <span className="font-mono text-zinc-300">{slugify(repoName)}</span>. Then,
+                  one time, connect that repo in Cloudflare Pages (Create → Pages → Connect to Git) —
+                  after that, every push auto-deploys.
                 </div>
-                <p className="text-[11px] text-zinc-600">
-                  Will use repo: <span className="text-zinc-400">{slugify(repoName)}</span> (Cloudflare Pages auto-deploys from GitHub)
-                </p>
               </>
             ) : (
               <div className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-[11px] leading-relaxed text-zinc-500">
@@ -499,7 +488,7 @@ export default function DeployWizard({
             {result && (
               <div className="flex flex-col gap-1 rounded-md border border-zinc-800 bg-zinc-950 p-3 text-xs">
                 <p className="text-sm font-medium text-emerald-400">
-                  {hosted ? "Deployed" : "Backed up to GitHub"}
+                  {hosted ? "Pushed to GitHub" : "Backed up to GitHub"}
                 </p>
                 <a
                   href={result.repoUrl}
@@ -509,15 +498,10 @@ export default function DeployWizard({
                 >
                   {result.repoUrl}
                 </a>
-                {result.siteUrl && (
-                  <a
-                    href={result.siteUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="truncate text-sky-400 hover:underline"
-                  >
-                    {result.siteUrl}
-                  </a>
+                {hosted && (
+                  <p className="text-[11px] leading-relaxed text-zinc-500">
+                    Connect this repo in Cloudflare Pages (one time) to get your live URL.
+                  </p>
                 )}
               </div>
             )}
