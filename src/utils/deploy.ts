@@ -100,7 +100,7 @@ export async function deployProject(
 
   onLog({
     step: "done",
-    message: "Pushed to GitHub! Connect this repo in Cloudflare Pages (one time) to go live — then every push auto-deploys.",
+    message: "Pushed to GitHub! Connect this repo in Cloudflare Pages (one time) to go live — then every push auto-deploys. https://dash.cloudflare.com/5ca3d737e1eee9501d1054ceff0e5a6d/workers/services/pages",
     ok: true,
   });
   return { repoUrl: repo.html_url, siteUrl: null };

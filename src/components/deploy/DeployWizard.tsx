@@ -500,7 +500,16 @@ export default function DeployWizard({
                 </a>
                 {hosted && (
                   <p className="text-[11px] leading-relaxed text-zinc-500">
-                    Connect this repo in Cloudflare Pages (one time) to get your live URL.
+                    Connect this repo in{" "}
+                    <a
+                      href="https://dash.cloudflare.com/5ca3d737e1eee9501d1054ceff0e5a6d/workers/services/pages"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sky-400 hover:underline"
+                    >
+                      Cloudflare Pages
+                    </a>{" "}
+                    (one time) to get your live URL.
                   </p>
                 )}
               </div>
