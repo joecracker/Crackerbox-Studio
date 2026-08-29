@@ -405,7 +405,6 @@ export default function App() {
           projectName: projects.activeProject.name,
           files,
           githubToken: ghToken,
-          cloudflareToken: cfToken ?? "",
           ...target,
           hosted,
           label: `Cracker Box ${todayKey()}`,
