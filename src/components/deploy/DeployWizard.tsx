@@ -176,9 +176,7 @@ export default function DeployWizard({
       ? "Unlock the vault first."
       : !vault.tokens.github
         ? "Connect a GitHub token in step 1."
-        : hosted && !vault.tokens.cloudflare
-          ? "Connect a Cloudflare token in step 1."
-          : null;
+        : null;
 
   const handleUnlock = () => {
     setSetupError(null);

@@ -375,16 +375,13 @@ export default function App() {
   const runQueuedDeploy = useCallback(async () => {
     if (autoDeployBusyRef.current) return;
     const ghToken = vault.tokens.github;
-    const cfToken = vault.tokens.cloudflare;
     const hosted = projects.activeProject.hosted;
     const files = projects.activeProject.files;
-    if (!vault.unlocked || !ghToken || (hosted && !cfToken) || files.length === 0) {
+    if (!vault.unlocked || !ghToken || files.length === 0) {
       const reason =
         files.length === 0
           ? "Nothing to deploy — this project has no files."
-          : hosted
-            ? "Skipped — unlock the vault in the Deploy tab to enable pushes."
-            : "Skipped — connect a GitHub token in the Deploy tab.";
+          : "Skipped — connect a GitHub token in the Deploy tab.";
       setAutoDeployStatus(reason);
       deploySettings.markCheck(reason);
       deploySettings.markAttempt(todayKey());
