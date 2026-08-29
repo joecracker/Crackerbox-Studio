@@ -499,18 +499,22 @@ export default function DeployWizard({
                   {result.repoUrl}
                 </a>
                 {hosted && (
-                  <p className="text-[11px] leading-relaxed text-zinc-500">
-                    Connect this repo in{" "}
-                    <a
-                      href="https://dash.cloudflare.com/5ca3d737e1eee9501d1054ceff0e5a6d/workers/services/pages"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-sky-400 hover:underline"
-                    >
-                      Cloudflare Pages
-                    </a>{" "}
-                    (one time) to get your live URL.
-                  </p>
+                  <div className="mt-1 flex flex-col gap-1 rounded-md border border-zinc-800 bg-zinc-950/60 p-2 text-[10px] leading-relaxed text-zinc-500">
+                    <p>
+                      In Cloudflare Pages, set <span className="font-mono text-zinc-300">Build command</span>{" "}
+                      to <span className="font-mono text-zinc-300">npm run build</span> and{" "}
+                      <span className="font-mono text-zinc-300">Output dir</span> to{" "}
+                      <span className="font-mono text-zinc-300">dist</span>.{" "}
+                      <a
+                        href="https://dash.cloudflare.com/5ca3d737e1eee9501d1054ceff0e5a6d/workers/services/pages"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sky-400 hover:underline"
+                      >
+                        Open Cloudflare Pages
+                      </a>
+                    </p>
+                  </div>
                 )}
               </div>
             )}
