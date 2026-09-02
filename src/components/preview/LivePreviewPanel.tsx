@@ -28,6 +28,8 @@ interface LivePreviewPanelProps {
   onFixError?: () => void;
   onDismissError?: () => void;
   preferStatic?: boolean;
+  onSnapshot?: () => void;
+  snapshotBusy?: boolean;
 }
 
 function StatusPill({ status, srcDoc }: { status: PreviewStatus; srcDoc: string | null }) {
@@ -155,6 +157,8 @@ export default function LivePreviewPanel({
   onFixError,
   onDismissError,
   preferStatic = false,
+  onSnapshot,
+  snapshotBusy = false,
 }: LivePreviewPanelProps) {
   const toolbar = usePreviewToolbar();
   const show = toolbar.visible;
@@ -193,6 +197,30 @@ export default function LivePreviewPanel({
                 Live Preview
               </span>
               <StatusPill status={previewStatus} srcDoc={srcDoc} />
+              {onSnapshot && (
+                <button
+                  type="button"
+                  onClick={onSnapshot}
+                  disabled={snapshotBusy}
+                  title={
+                    snapshotBusy
+                      ? "Capturing…"
+                      : "Capture the preview and send it to the chat for the AI to see"
+                  }
+                  aria-label="Send preview snapshot to chat"
+                  className="flex h-6 items-center gap-1 rounded-md border border-zinc-700 bg-zinc-900/80 px-1.5 text-[10px] text-zinc-300 transition-colors hover:border-sky-600 hover:text-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path
+                      d="M2 3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5v9a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12.5v-9Z"
+                      stroke="currentColor"
+                      strokeWidth="1.2"
+                    />
+                    <circle cx="8" cy="8" r="2.2" stroke="currentColor" strokeWidth="1.2" />
+                  </svg>
+                  {snapshotBusy ? "Capturing…" : "Snapshot"}
+                </button>
+              )}
               <div className="flex-1" />
               <button
                 type="button"

@@ -75,6 +75,7 @@ import { flattenFiles } from "./data/demoFiles";
 import type { DemoFile } from "./data/demoFiles";
 import { readTreeFromContainer, writeWorkspaceFile } from "./utils/workspaceWebContainer";
 import { extractPreview, buildStaticPreview } from "./utils/preview";
+import { captureCurrentTab } from "./utils/snapshot";
 import { supportsVision } from "./data/models";
 import { formatBytes } from "./utils/workspace";
 import {
@@ -360,6 +361,34 @@ export default function App() {
     chat.send(prompt, []);
     void chatStream.stream(prompt, []);
   }, [previewRuntime.detectedError, chatStream.busy, chat, chatStream]);
+
+  const [snapshotBusy, setSnapshotBusy] = useState(false);
+  const handleSnapshot = useCallback(async () => {
+    if (snapshotBusy || chatStream.busy) return;
+    setSnapshotBusy(true);
+    try {
+      const dataUrl = await captureCurrentTab();
+      if (!dataUrl) {
+        chat.send("(Snapshot couldn't be captured — your browser blocked screen capture.)", []);
+        void chatStream.stream("(Snapshot couldn't be captured — your browser blocked screen capture.)", []);
+        return;
+      }
+      const prompt =
+        "Here is a snapshot of the live preview. Look at it carefully and tell me how the app looks. " +
+        "If anything looks wrong, broken, or off, point it out and fix it. Otherwise confirm it looks good.";
+      const attachment: ChatAttachment = {
+        id: Math.random().toString(36).slice(2, 10),
+        name: "preview-snapshot.png",
+        type: "image/png",
+        size: Math.round((dataUrl.length * 3) / 4),
+        dataUrl,
+      };
+      chat.send(prompt, [attachment]);
+      void chatStream.stream(prompt, [attachment]);
+    } finally {
+      setSnapshotBusy(false);
+    }
+  }, [snapshotBusy, chatStream.busy, chat, chatStream]);
 
   const previewBrowser = usePreviewBrowser();
 
@@ -1278,6 +1307,8 @@ export default function App() {
               onFixError={handleFixError}
               onDismissError={previewRuntime.dismissError}
               preferStatic={staticFromFiles !== null}
+              onSnapshot={() => void handleSnapshot()}
+              snapshotBusy={snapshotBusy}
             />
           )}
         </div>
