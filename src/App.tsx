@@ -77,6 +77,7 @@ import { readTreeFromContainer, writeWorkspaceFile } from "./utils/workspaceWebC
 import { extractPreview, buildStaticPreview } from "./utils/preview";
 import { captureCurrentTab } from "./utils/snapshot";
 import { supportsVision } from "./data/models";
+import { CRACKER_BOX_GUIDE } from "./data/crackerBoxGuide";
 import { formatBytes } from "./utils/workspace";
 import {
   importFromDataTransfer,
@@ -277,8 +278,8 @@ export default function App() {
     messages: chat.messages,
     model: parameters.selectedModelId,
     systemPrompt: chat.activeSession?.summary
-      ? `${personality.composePrompt(parameters.systemPrompt)}\n\n## Archived session summary\n${chat.activeSession.summary}`
-      : personality.composePrompt(parameters.systemPrompt),
+      ? `${personality.composePrompt(parameters.systemPrompt)}\n\n## Archived session summary\n${chat.activeSession.summary}\n\n${CRACKER_BOX_GUIDE}`
+      : `${personality.composePrompt(parameters.systemPrompt)}\n\n${CRACKER_BOX_GUIDE}`,
     temperature: parameters.temperature,
     maxTokens: parameters.maxTokens,
     getApiKey: () => (vault.unlocked ? vault.tokens.openrouter ?? null : null),
