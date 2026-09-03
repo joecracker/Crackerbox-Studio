@@ -22,6 +22,7 @@ import ParametersDialog from "./components/parameters/ParametersDialog";
 import TokenCounter from "./components/parameters/TokenCounter";
 import { useOpenRouterCredits } from "./hooks/useOpenRouterCredits";
 import { providerConfig } from "./data/providers";
+import { GOD_MODE_TOOLS, GOD_MODE_NAMES, runGodModeTool } from "./data/godModeTools";
 import ZenView from "./components/zen/ZenView";
 import CommandPalette from "./components/commands/CommandPalette";
 import ShortcutsDialog from "./components/commands/ShortcutsDialog";
@@ -303,8 +304,16 @@ export default function App() {
     setAssistantToolCalls: chat.setAssistantToolCalls,
     patchAssistantToolCall: chat.patchAssistantToolCall,
     onUsage: (prompt, completion) => chat.addUsage(prompt, completion),
-    extraTools: mcp.toolDefinitions,
-    callExternalTool: (name, args) => mcp.callTool(name, args),
+    extraTools: [...mcp.toolDefinitions, ...GOD_MODE_TOOLS],
+    callExternalTool: (name, args) => {
+      if (GOD_MODE_NAMES.has(name)) {
+        return runGodModeTool(name, args, {
+          persistFile,
+          refreshTree: syncFromContainer,
+        }).catch((e) => `God Mode tool error: ${e instanceof Error ? e.message : e}`);
+      }
+      return mcp.callTool(name, args);
+    },
   });
   const requestPreviewApproval = useCallback(
     (pending: PreviewApprovalRequest): Promise<boolean> =>
