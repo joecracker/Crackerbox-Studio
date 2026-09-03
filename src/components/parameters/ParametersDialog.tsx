@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { PROVIDERS, PROVIDER_LIST } from "../../data/providers";
 import type { Model } from "../../data/models";
 import { describeModalities, supportsVision } from "../../data/models";
 import type { ParametersState } from "../../hooks/useParameters";
@@ -172,6 +173,8 @@ export default function ParametersDialog({
   const {
     selectedModelId,
     setSelectedModelId,
+    providerId,
+    setProviderId,
     systemPrompt,
     setSystemPrompt,
     temperature,
@@ -233,9 +236,32 @@ export default function ParametersDialog({
           </button>
         </header>
         <div className="min-h-0 overflow-y-auto px-4 py-4">
+          <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+            Provider
+          </label>
+          <div className="flex gap-2">
+            {PROVIDER_LIST.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setProviderId(p.id)}
+                title={p.help}
+                className={`flex-1 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
+                  providerId === p.id
+                    ? "border-sky-500 bg-sky-500/10 text-sky-300"
+                    : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[11px] text-zinc-600">
+            {PROVIDERS[providerId].help}
+          </p>
           <label
             htmlFor="param-model"
-            className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500"
+            className="mb-1.5 mt-4 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500"
           >
             Model
           </label>

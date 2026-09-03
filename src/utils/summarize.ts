@@ -1,12 +1,11 @@
 import type { ChatMessage } from "../hooks/useChatHistory";
 import type { Model } from "../data/models";
 
-const SUMMARIZE_URL = "https://openrouter.ai/api/v1/chat/completions";
-
 interface SummarizeOptions {
   projectName: string;
   messages: ChatMessage[];
   apiKey: string;
+  chatUrl: string;
   models: Model[];
   currentModelId: string;
 }
@@ -81,6 +80,7 @@ export async function summarizeConversation({
   projectName,
   messages,
   apiKey,
+  chatUrl,
   models,
   currentModelId,
 }: SummarizeOptions): Promise<SummarizeResult> {
@@ -88,7 +88,7 @@ export async function summarizeConversation({
   if (!model) return { ok: false, summary: null, model: null, error: "No model available for summarization." };
 
   try {
-    const res = await fetch(SUMMARIZE_URL, {
+    const res = await fetch(chatUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -3,12 +3,19 @@ import { usePersistentState } from "./usePersistentState";
 import { decryptToken, encryptToken } from "../utils/crypto";
 import type { EncryptedPayload } from "../utils/crypto";
 
-export type TokenService = "github" | "netlify" | "openrouter" | "cloudflare" | "homeassistant";
+export type TokenService =
+  | "github"
+  | "netlify"
+  | "openrouter"
+  | "opencode"
+  | "cloudflare"
+  | "homeassistant";
 
 interface VaultState {
   github: EncryptedPayload | null;
   netlify: EncryptedPayload | null;
   openrouter: EncryptedPayload | null;
+  opencode: EncryptedPayload | null;
   cloudflare: EncryptedPayload | null;
   homeassistant: EncryptedPayload | null;
 }
@@ -21,6 +28,7 @@ const EMPTY_VAULT: VaultState = {
   github: null,
   netlify: null,
   openrouter: null,
+  opencode: null,
   cloudflare: null,
   homeassistant: null,
 };
@@ -65,6 +73,7 @@ export function useTokenVault(): TokenVault {
       if (vault.github) result.github = await decryptToken(phrase, vault.github);
       if (vault.netlify) result.netlify = await decryptToken(phrase, vault.netlify);
       if (vault.openrouter) result.openrouter = await decryptToken(phrase, vault.openrouter);
+      if (vault.opencode) result.opencode = await decryptToken(phrase, vault.opencode);
       if (vault.cloudflare) result.cloudflare = await decryptToken(phrase, vault.cloudflare);
       if (vault.homeassistant) result.homeassistant = await decryptToken(phrase, vault.homeassistant);
       setPassphrase(phrase);

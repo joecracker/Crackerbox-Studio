@@ -32,7 +32,8 @@ import type {
 import type { DemoFile } from "../data/demoFiles";
 import type { WebContainer } from "@webcontainer/api";
 
-const CHAT_URL = "https://openrouter.ai/api/v1/chat/completions";
+// The chat completions endpoint is provider-aware (see src/data/providers.ts);
+// the URL is passed in via ChatStreamOptions.chatUrl.
 const HISTORY_LIMIT = 40;
 const MAX_TOOL_ITERATIONS = 8;
 const READY_TIMEOUT_MS = 10_000;
@@ -234,6 +235,7 @@ export interface ChatStreamOptions {
   temperature: number;
   maxTokens: number;
   getApiKey: () => string | null;
+  chatUrl: string;
   workspaceFiles: DemoFile[];
   webContainer: WebContainer | null;
   webContainerAvailable: boolean;
@@ -510,6 +512,7 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
         maxTokens,
         messages,
         getApiKey,
+        chatUrl,
         workspaceFiles,
         webContainer,
         webContainerAvailable,
@@ -673,7 +676,7 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
 
         let res: Response;
         try {
-          res = await fetch(CHAT_URL, {
+          res = await fetch(chatUrl, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",

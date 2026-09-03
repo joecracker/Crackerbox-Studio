@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import AppHeader from "./components/layout/AppHeader";
 import PanelResizer from "./components/layout/PanelResizer";
@@ -21,6 +21,7 @@ import TerminalPanel from "./components/terminal/TerminalPanel";
 import ParametersDialog from "./components/parameters/ParametersDialog";
 import TokenCounter from "./components/parameters/TokenCounter";
 import { useOpenRouterCredits } from "./hooks/useOpenRouterCredits";
+import { providerConfig } from "./data/providers";
 import ZenView from "./components/zen/ZenView";
 import CommandPalette from "./components/commands/CommandPalette";
 import ShortcutsDialog from "./components/commands/ShortcutsDialog";
@@ -185,6 +186,7 @@ export default function App() {
   const deployQueue = useDeployQueue();
   const deploySettings = useDeploySettings();
   const mcp = useMcp({ token: vault.tokens.homeassistant ?? null });
+  
   const personality = usePersonality();
   const guardrails = useGuardrails();
   const webContainer = useWebContainer();
@@ -196,6 +198,8 @@ export default function App() {
   const parameters = useParameters();
 
   const [mutationTick, setMutationTick] = useState(0);
+  const providerCfg = providerConfig(parameters.providerId);  
+  const providerApiKey = vault.unlocked ? vault.tokens[providerCfg.tokenService] ?? null : null;
   const [previewApproval, setPreviewApproval] = useState<PendingApproval | null>(null);
   const previewApprovalResolverRef = useRef<((approved: boolean) => void) | null>(null);
 
@@ -283,7 +287,8 @@ export default function App() {
       : `${personality.composePrompt(parameters.systemPrompt)}\n\n${CRACKER_BOX_GUIDE}`,
     temperature: parameters.temperature,
     maxTokens: parameters.maxTokens,
-    getApiKey: () => (vault.unlocked ? vault.tokens.openrouter ?? null : null),
+    getApiKey: () => providerApiKey,
+    chatUrl: providerCfg.chatUrl,
     workspaceFiles: activeFiles,
     webContainer: webContainer.container,
     webContainerAvailable: webContainer.available,
@@ -371,8 +376,8 @@ export default function App() {
     try {
       const dataUrl = await captureCurrentTab();
       if (!dataUrl) {
-        chat.send("(Snapshot couldn't be captured — your browser blocked screen capture.)", []);
-        void chatStream.stream("(Snapshot couldn't be captured — your browser blocked screen capture.)", []);
+        chat.send("(Snapshot couldn't be captured â€” your browser blocked screen capture.)", []);
+        void chatStream.stream("(Snapshot couldn't be captured â€” your browser blocked screen capture.)", []);
         return;
       }
       const prompt =
@@ -411,8 +416,8 @@ export default function App() {
     if (!vault.unlocked || !ghToken || files.length === 0) {
       const reason =
         files.length === 0
-          ? "Nothing to deploy — this project has no files."
-          : "Skipped — connect a GitHub token in the Deploy tab.";
+          ? "Nothing to deploy â€” this project has no files."
+          : "Skipped â€” connect a GitHub token in the Deploy tab.";
       setAutoDeployStatus(reason);
       deploySettings.markCheck(reason);
       deploySettings.markAttempt(todayKey());
@@ -426,7 +431,7 @@ export default function App() {
         siteName: slugify(deploySettings.siteName || projects.activeProject.name),
         repoPrivate: deploySettings.repoPrivate,
       };
-      setAutoDeployStatus(hosted ? "Pushing accumulated changes…" : "Backing up to GitHub…");
+      setAutoDeployStatus(hosted ? "Pushing accumulated changesâ€¦" : "Backing up to GitHubâ€¦");
       const res = await deployProject(
         {
           projectName: projects.activeProject.name,
@@ -441,13 +446,13 @@ export default function App() {
       deployQueue.clearDirty(projects.activeProjectId);
       deploySettings.saveTarget(target);
       const pushedNote = res.siteUrl
-        ? `Pushed ${files.length} file${files.length === 1 ? "" : "s"} · live at ${res.siteUrl}`
+        ? `Pushed ${files.length} file${files.length === 1 ? "" : "s"} Â· live at ${res.siteUrl}`
         : `Backed up ${files.length} file${files.length === 1 ? "" : "s"} to GitHub`;
       deploySettings.markCheck(pushedNote);
       setAutoDeployStatus(
         res.siteUrl
-          ? `Pushed ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · live at ${res.siteUrl}`
-          : `Backed up ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · GitHub only`
+          ? `Pushed ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} Â· live at ${res.siteUrl}`
+          : `Backed up ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} Â· GitHub only`
       );
     } catch (e) {
       const failedNote = e instanceof Error ? `Deploy failed: ${e.message}` : "Deploy failed";
@@ -478,7 +483,7 @@ export default function App() {
     lastAutoDeployDate: deploySettings.lastAutoDeployDate,
   };
 
-  // Nightly batching: once per day, when the overnight window opens (00:00–06:00)
+  // Nightly batching: once per day, when the overnight window opens (00:00â€“06:00)
   // or on first launch still carrying changes from a previous day. An empty
   // queue is a silent no-op, so idle days cost nothing.
   useEffect(() => {
@@ -488,14 +493,14 @@ export default function App() {
       const today = todayKey();
       if (ctx.lastAutoDeployDate === today) return;
       if (ctx.queue.count === 0) {
-        deploySettings.markCheck("Nothing pending — no push needed");
+        deploySettings.markCheck("Nothing pending â€” no push needed");
         return;
       }
       const hour = new Date().getHours();
       const overnight = hour < 6;
       const carryover = Object.values(ctx.queue.entries).some((iso) => iso.slice(0, 10) < today);
       if (!overnight && !carryover) {
-        deploySettings.markCheck("Changes pending — waiting for tonight's window");
+        deploySettings.markCheck("Changes pending â€” waiting for tonight's window");
         return;
       }
       void queuedDeployRef.current();
@@ -532,7 +537,7 @@ export default function App() {
 
   const describeImport = useCallback((result: ImportResult): string => {
     const name = result.name ?? "Imported Project";
-    let text = `Imported "${name}" — ${result.fileCount} file${result.fileCount === 1 ? "" : "s"} (${formatBytes(result.totalBytes)})`;
+    let text = `Imported "${name}" â€” ${result.fileCount} file${result.fileCount === 1 ? "" : "s"} (${formatBytes(result.totalBytes)})`;
     if (result.skipped.length > 0) {
       text += `; skipped ${result.skipped.length}${result.exceeded ? "+" : ""} (excluded/binary/oversized)`;
     }
@@ -644,7 +649,7 @@ export default function App() {
     try {
       const data = await restoreBackup<CrackerboxBackupPayload>();
       if (!data) {
-        setDriveStatus("No backup found in Drive yet — save one first.");
+        setDriveStatus("No backup found in Drive yet â€” save one first.");
         return;
       }
       if (
@@ -697,12 +702,12 @@ export default function App() {
     [applyRestoredBackup, showImportNotice]
   );
 
-  const modelSource = useModels();
+  const modelSource = useModels(parameters.providerId);
 
   const selectedModel = modelSource.models.find((m) => m.id === parameters.selectedModelId);
   const modelLabel = parameters.selectedModelId
     ? selectedModel
-      ? `${selectedModel.name} — ${selectedModel.provider}`
+      ? `${selectedModel.name} â€” ${selectedModel.provider}`
       : parameters.selectedModelId
     : null;
   const visionSupported = selectedModel ? supportsVision(selectedModel) : false;
@@ -718,7 +723,8 @@ export default function App() {
     projectName: projects.activeProject.name,
     models: modelSource.models,
     currentModelId: parameters.selectedModelId,
-    apiKey: vault.unlocked ? vault.tokens.openrouter ?? null : null,
+    apiKey: providerApiKey,
+    chatUrl: providerCfg.chatUrl,
     onSummarized: chat.setSessionSummary,
     onCreateSession: (title?: string) => chat.createSession(title),
     onSelectSession: chat.selectSession,
@@ -735,11 +741,11 @@ export default function App() {
   const credits = useOpenRouterCredits(creditsApiKey);
 
   const sendBlockedReason = !parameters.selectedModelId
-    ? "No model selected — open Parameters (Ctrl+Shift+,) to pick one."
+    ? "No model selected â€” open Parameters (Ctrl+Shift+,) to pick one."
     : !vault.unlocked
-      ? "Unlock the vault — open Deploy in the sidebar and enter your passphrase."
-      : !vault.tokens.openrouter
-        ? "No OpenRouter API key saved — add one under Deploy → Connect accounts."
+      ? "Unlock the vault â€” open Deploy in the sidebar and enter your passphrase."
+      : !(vault.tokens[providerCfg.tokenService] ?? null)
+        ? `No ${providerCfg.label} API key saved â€” add one under Deploy â†’ Connect accounts.`
         : null;
 
   const handleChatSend = (text: string, attachments: ChatAttachment[]) => {
@@ -816,7 +822,7 @@ export default function App() {
   const proposeDemoEdit = (path: string) => {
     const file = flattenFiles(activeFiles).find((f) => f.path === path);
     if (!file || file.content == null) return;
-    edits.proposeEdit(path, `${file.content}// pending AI edit (demo — review below)\n`, file.content);
+    edits.proposeEdit(path, `${file.content}// pending AI edit (demo â€” review below)\n`, file.content);
   };
 
   const approveEdit = (id: string) => {
@@ -1298,7 +1304,7 @@ export default function App() {
               />
             )}
             <footer className="flex h-10 shrink-0 items-center justify-between border-t border-zinc-800 px-4 text-xs text-zinc-500">
-              <span>Cracker Box — your AI dev workspace</span>
+              <span>Cracker Box â€” your AI dev workspace</span>
               <TokenCounter count={contextGuard.tokenCount} />
             </footer>
           </main>

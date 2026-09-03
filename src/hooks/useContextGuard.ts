@@ -13,6 +13,7 @@ interface HandoffOptions {
   models: Model[];
   currentModelId: string;
   apiKey: string | null;
+  chatUrl: string;
   onSummarized: (sessionId: string, summary: string) => void;
   onCreateSession: (title?: string) => string;
   onSelectSession: (id: string) => void;
@@ -36,6 +37,7 @@ export function useContextGuard({
   models,
   currentModelId,
   apiKey,
+  chatUrl,
   onSummarized,
   onCreateSession,
   onSelectSession,
@@ -77,6 +79,7 @@ export function useContextGuard({
         projectName,
         messages: session.messages,
         apiKey,
+        chatUrl,
         models,
         currentModelId,
       });

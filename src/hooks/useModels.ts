@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { normalizeModel, sortModels } from "../data/models";
 import type { Model, OpenRouterModel } from "../data/models";
-
-const MODELS_URL = "https://openrouter.ai/api/v1/models";
+import { providerConfig } from "../data/providers";
+import type { ProviderId } from "../data/providers";
 
 export interface UseModelsResult {
   models: Model[];
@@ -11,7 +11,7 @@ export interface UseModelsResult {
   reload: () => void;
 }
 
-export function useModels(): UseModelsResult {
+export function useModels(providerId: ProviderId = "openrouter"): UseModelsResult {
   const [models, setModels] = useState<Model[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -22,10 +22,11 @@ export function useModels(): UseModelsResult {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    const config = providerConfig(providerId);
 
     const load = async () => {
       try {
-        const res = await fetch(MODELS_URL, { signal: controller.signal });
+        const res = await fetch(config.modelsUrl, { signal: controller.signal });
         if (!res.ok) throw new Error(`Request failed (${res.status})`);
         const json = (await res.json()) as { data: unknown[] };
         const list = sortModels(
@@ -46,7 +47,7 @@ export function useModels(): UseModelsResult {
       cancelled = true;
       controller.abort();
     };
-  }, [nonce]);
+  }, [providerId, nonce]);
 
   const reload = useCallback(() => setNonce((n) => n + 1), []);
 

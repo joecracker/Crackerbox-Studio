@@ -288,6 +288,14 @@ export default function DeployWizard({
                 onRemove={() => vault.clearToken("openrouter")}
               />
               <TokenField
+                label="OpenCode Zen API key (chat)"
+                placeholder="oc-…"
+                token={vault.tokens.opencode ?? ""}
+                hasToken={!!vault.tokens.opencode}
+                onSave={(value) => void vault.saveToken("opencode", value)}
+                onRemove={() => vault.clearToken("opencode")}
+              />
+              <TokenField
                 label="Home Assistant token (MCP)"
                 placeholder="long-lived token…"
                 token={vault.tokens.homeassistant ?? ""}
@@ -296,8 +304,8 @@ export default function DeployWizard({
                 onRemove={() => vault.clearToken("homeassistant")}
               />
               <p className="text-[11px] leading-relaxed text-zinc-600">
-                The OpenRouter key powers chat in this workspace. Tokens are encrypted with your
-                vault passphrase.
+                The OpenRouter or OpenCode Zen key powers chat in this workspace (pick which in
+                Parameters). Tokens are encrypted with your vault passphrase.
               </p>
               <button
                 type="button"
