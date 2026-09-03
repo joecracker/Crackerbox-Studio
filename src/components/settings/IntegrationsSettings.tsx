@@ -43,7 +43,7 @@ export default function IntegrationsSettings({ mcp, vault }: IntegrationsSetting
           id="mcp-url"
           value={mcp.url}
           onChange={(e) => mcp.setUrl(e.target.value)}
-          placeholder="https://your-instance.ui.nabu.casa/mcp"
+          placeholder="https://your-instance.ui.nabu.casa/api/mcp"
           className="h-8 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
         />
 

@@ -23,7 +23,7 @@ Here is how the app works so you can guide the user accurately:
 - "Open folder" in the Files panel lets the user link a real folder on their computer (Chrome/Edge only). Cracker Box reads it into the project and can "Save" changes back to disk.
 
 ### Home Assistant (MCP)
-- Cracker Box connects to Home Assistant's MCP server (via a Nabu Casa URL like https://your-instance.ui.nabu.casa/mcp) under Settings → Home Assistant (MCP). A Home Assistant long-lived token is required (stored in the vault under Deploy → Connect accounts).
+- Cracker Box connects to Home Assistant's MCP server (via a Nabu Casa URL like https://your-instance.ui.nabu.casa/api/mcp) under Settings → Home Assistant (MCP). The MCP Server integration must be added in Home Assistant first (Settings → Devices & services → Add integration → Model Context Protocol Server). A Home Assistant long-lived token is required (stored in the vault under Deploy → Connect accounts).
 - The connection is proxied through Cracker Box's own backend, so it works without needing Home Assistant open in a tab — the HA instance just needs to be running.
 - When connected, its tools (entity queries, service calls, etc.) are available to the chat so the AI can read real entity states, call services, and build dashboards from live data.
 
