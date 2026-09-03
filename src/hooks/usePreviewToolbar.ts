@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePersistentState } from "./usePersistentState";
 
-const TOOLBAR_KEY = "crackerbox.preview.toolbar";
+const TOOLBAR_KEY = "crackerbox.preview.toolbar.v2";
 const HIDE_DELAY_MS = 1600;
 
 interface ToolbarPrefs {
@@ -11,7 +11,7 @@ interface ToolbarPrefs {
 
 export function usePreviewToolbar() {
   const [prefs, setPrefs] = usePersistentState<ToolbarPrefs>(TOOLBAR_KEY, {
-    autoHide: true,
+    autoHide: false,
     pinned: false,
   });
   const [visible, setVisible] = useState(true);
