@@ -153,7 +153,7 @@ async function runSearch(
 	// Preferred: Tavily (reliable, clean API) when the user has a key saved.
 	if (tavilyKey) {
 		const viaTavily = await runTavilySearch(query, tavilyKey);
-		if (!("error" in viaTavily) || viaTavily.results.length > 0) return viaTavily;
+		if (!("error" in viaTavily)) return viaTavily;
 	}
 	// Fallback: DuckDuckGo Lite first, then HTML (may be bot-challenged from
 	// datacenter IPs, but worth a try when no key is configured).
@@ -258,13 +258,13 @@ export const onRequestPost = async ({ request }: { request: Request; env: Env })
 				signal: controller.signal,
 			});
 			if (!res.ok) return Response.json({ error: `Upstream returned HTTP ${res.status}.` }, { status: 502 });
-			const contentType = res.headers.get("content-type") ?? "";
-			if (contentType.includes("json")) {
+			const resContentType = res.headers.get("content-type") ?? "";
+			if (resContentType.includes("json")) {
 				const text = await res.text();
 				return Response.json({ ok: true, content: text }, { headers: { "Cache-Control": "no-store" } });
 			}
 			const text = (await res.text()).slice(0, 900_000);
-			const plain = contentType.includes("html") ? stripHtml(text) : text;
+			const plain = resContentType.includes("html") ? stripHtml(text) : text;
 			return Response.json({ ok: true, content: plain.slice(0, 900_000) }, { headers: { "Cache-Control": "no-store" } });
 		} finally {
 			clearTimeout(timer);
