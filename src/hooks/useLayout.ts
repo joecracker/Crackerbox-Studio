@@ -1,6 +1,8 @@
 import { usePersistentState } from "./usePersistentState";
 
-const LAYOUT_KEY = "crackerbox.layout.v2";
+// v3: opens chat-first (Open Chamber style) — all side panels collapsed so the
+// chat + composer get the full screen. Bring panels back from the header.
+const LAYOUT_KEY = "crackerbox.layout.v3";
 
 export const SIDEBAR_MIN = 200;
 export const SIDEBAR_MAX = 720;
@@ -34,7 +36,7 @@ const DEFAULT_LAYOUT: LayoutState = {
   sidebarWidth: 320,
   sidebarCollapsed: true,
   previewWidth: Math.round(window.innerWidth * PREVIEW_DEFAULT_RATIO),
-  previewCollapsed: false,
+  previewCollapsed: true,
   fileTreeWidth: 240,
   fileTreeCollapsed: true,
   terminalOpen: false,
