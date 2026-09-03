@@ -94,16 +94,52 @@ function parseDdgResults(html: string): SearchResult[] {
 	return out.slice(0, 10);
 }
 
-async function runSearch(query: string): Promise<{ results: SearchResult[] } | { error: string }> {
-	const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
-		method: "GET",
-		headers: { "User-Agent": "Mozilla/5.0 CrackerBox-GodMode" },
+// Parse DuckDuckGo "lite" results (different markup: result-link / result-snippet).
+function parseDdgLiteResults(html: string): SearchResult[] {
+	const out: SearchResult[] = [];
+	const linkRe = /<a[^>]+rel="nofollow"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+	const snipRe = /<td[^>]*class="result-snippet"[^>]*>([\s\S]*?)<\/td>/gi;
+	const titles: Array<{ url: string; title: string }> = [];
+	let m: RegExpExecArray | null;
+	while ((m = linkRe.exec(html)) !== null) {
+		const url = m[1].replace(/^\/\/duckduckgo\.com\/l\/\?uddg=([^&]+).*$/i, (_, u) => decodeURIComponent(u));
+		titles.push({ url, title: stripHtml(m[2]).trim() });
+	}
+	const snips: string[] = [];
+	while ((m = snipRe.exec(html)) !== null) {
+		snips.push(stripHtml(m[1]).trim());
+	}
+	titles.forEach((t, i) => {
+		out.push({ title: t.title, url: t.url, snippet: snips[i] ?? "" });
 	});
-	if (!res.ok) return { error: `Search provider returned HTTP ${res.status}.` };
-	const html = await res.text();
-	const results = parseDdgResults(html);
-	if (results.length === 0) return { error: "No results returned by the search provider." };
-	return { results };
+	return out.slice(0, 10);
+}
+
+const SEARCH_UA =
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+
+async function runSearch(query: string): Promise<{ results: SearchResult[] } | { error: string }> {
+	// Try DuckDuckGo Lite first (more reliable from datacenter IPs).
+	const lite = await fetch(`https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`, {
+		method: "GET",
+		headers: { "User-Agent": SEARCH_UA },
+	});
+	if (lite.ok) {
+		const html = await lite.text();
+		const results = parseDdgLiteResults(html);
+		if (results.length > 0) return { results };
+	}
+	// Fallback to the classic HTML endpoint.
+	const htmlRes = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
+		method: "GET",
+		headers: { "User-Agent": SEARCH_UA },
+	});
+	if (htmlRes.ok) {
+		const html = await htmlRes.text();
+		const results = parseDdgResults(html);
+		if (results.length > 0) return { results };
+	}
+	return { error: "No results returned by the search provider." };
 }
 
 // Gate: only allow GitHub domains to receive a supplied auth token so it can't
