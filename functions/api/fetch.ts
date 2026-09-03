@@ -1,9 +1,12 @@
-// Cloudflare Pages Function — fetch proxy for Cracker Box "God Mode" tools.
+// Cloudflare Pages Function — God Mode proxy for Cracker Box.
 //
-// The chat agent needs to reach the open web and GitHub from a browser
-// sandbox (no CORS, no server). This function relays safe GET/POST fetches
-// through Cracker Box's own backend and returns the raw body,
-// so web_fetch + git_clone work from the chat.
+// Provides three capabilities to the in-app chat agent:
+//   1. fetch  : { url }      — read the text of any public page/URL
+//   2. search : { search }   — web search (DuckDuckGo HTML, parsed to results)
+//   3. github : optional "authorization" forwarded to api/raw.githubusercontent
+//                so git_clone can hit PRIVATE repos with the user's token.
+//
+// Private hosts and metadata endpoints are blocked.
 
 interface Env {}
 
@@ -12,8 +15,9 @@ const BLOCKED_HOSTS = new Set([
 	"127.0.0.1",
 	"::1",
 	"0.0.0.0",
-	"169.254.169.254", // cloud metadata
+	"169.254.169.254",
 ]);
+
 function isBlocked(urlStr: string): string | null {
 	let url: URL;
 	try {
@@ -28,20 +32,91 @@ function isBlocked(urlStr: string): string | null {
 	if (host.endsWith(".localhost") || host === "" || BLOCKED_HOSTS.has(host)) {
 		return "This host is blocked by the fetch proxy.";
 	}
-	// Private/loopback/link-local hostname guards.
-	if (host.endsWith(".internal") || host.endsWith(".local") || host.endsWith(".home.arpa") || host === "host.docker.internal") {
+	if (
+		host.endsWith(".internal") ||
+		host.endsWith(".local") ||
+		host.endsWith(".home.arpa") ||
+		host === "host.docker.internal"
+	) {
 		return "This host is blocked by the fetch proxy.";
 	}
 	if (host.startsWith("10.") || host.startsWith("192.168.") || host.startsWith("172.")) return "Private IPs are blocked.";
 	if (host.startsWith("127.") || host.startsWith("169.254.")) return "Private IPs are blocked.";
-	// Masked .ui.nabu.casa (your HA) — keep it out of the generic proxy.
 	if (host.endsWith(".ui.nabu.casa")) return "Use the Home Assistant MCP, not the fetch proxy, for Nabu Casa.";
 	return null;
 }
 
-export const onRequestPost = async ({
-	request,
-}: { request: Request; env: Env }): Promise<Response> => {
+function stripHtml(html: string): string {
+	return html
+		.replace(/<script[\s\S]*?<\/script>/gi, " ")
+		.replace(/<style[\s\S]*?<\/style>/gi, " ")
+		.replace(/<[^>]+>/g, " ")
+		.replace(/\s{3,}/g, "\n")
+		.trim();
+}
+
+function decodeEntity(s: string): string {
+	return s
+		.replace(/&amp;/g, "&")
+		.replace(/&lt;/g, "<")
+		.replace(/&gt;/g, ">")
+		.replace(/&quot;/g, '"')
+		.replace(/&#x27;/g, "'")
+		.replace(/&#39;/g, "'");
+}
+
+interface SearchResult {
+	title: string;
+	url: string;
+	snippet: string;
+}
+
+// Parse DuckDuckGo HTML results into structured results.
+function parseDdgResults(html: string): SearchResult[] {
+	const out: SearchResult[] = [];
+	const linkRe = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+	const snipRe = /<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi;
+	const titles: Array<{ url: string; title: string }> = [];
+	let m: RegExpExecArray | null;
+	while ((m = linkRe.exec(html)) !== null) {
+		let url = m[1];
+		const rel = url.match(/uddg=([^&]+)/);
+		if (rel) url = decodeURIComponent(rel[1]);
+		titles.push({ url, title: stripHtml(m[2]).trim() });
+	}
+	const snips: string[] = [];
+	while ((m = snipRe.exec(html)) !== null) {
+		snips.push(stripHtml(m[1]).trim());
+	}
+	titles.forEach((t, i) => {
+		out.push({ title: t.title, url: t.url, snippet: snips[i] ?? "" });
+	});
+	return out.slice(0, 10);
+}
+
+async function runSearch(query: string): Promise<{ results: SearchResult[] } | { error: string }> {
+	const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
+		method: "GET",
+		headers: { "User-Agent": "Mozilla/5.0 CrackerBox-GodMode" },
+	});
+	if (!res.ok) return { error: `Search provider returned HTTP ${res.status}.` };
+	const html = await res.text();
+	const results = parseDdgResults(html);
+	if (results.length === 0) return { error: "No results returned by the search provider." };
+	return { results };
+}
+
+// Gate: only allow GitHub domains to receive a supplied auth token so it can't
+// be leaked to arbitrary hosts.
+function authAllowed(host: string): boolean {
+	return (
+		host === "api.github.com" ||
+		host === "raw.githubusercontent.com" ||
+		host.endsWith(".raw.githubusercontent.com")
+	);
+}
+
+export const onRequestPost = async ({ request }: { request: Request; env: Env }): Promise<Response> => {
 	try {
 		let body: unknown;
 		try {
@@ -49,12 +124,33 @@ export const onRequestPost = async ({
 		} catch {
 			return Response.json({ error: "Invalid JSON body." }, { status: 400 });
 		}
-		const urlStr = (body as { url?: string }).url ?? "";
-		if (!urlStr || typeof urlStr !== "string") {
-			return Response.json({ error: "Missing 'url'." }, { status: 400 });
+		const b = body as {
+			url?: string;
+			search?: string;
+			authorization?: string;
+		};
+
+		// MODE 1: web search
+		if (typeof b.search === "string" && b.search.trim()) {
+			const q = b.search.trim().slice(0, 200);
+			const result = await runSearch(q);
+			return Response.json({ ok: true, search: result }, { headers: { "Cache-Control": "no-store" } });
 		}
+
+		// MODE 2: fetch a URL
+		const urlStr = typeof b.url === "string" ? b.url.trim() : "";
+		if (!urlStr) return Response.json({ error: "Missing 'url' or 'search'." }, { status: 400 });
 		const blocked = isBlocked(urlStr);
 		if (blocked) return Response.json({ error: blocked }, { status: 403 });
+
+		const upstreamHeaders: Record<string, string> = {
+			"User-Agent": "CrackerBox/GodMode",
+			Accept: "text/html,application/xhtml+xml,text/plain,application/json,*/*;q=0.8",
+		};
+		if (typeof b.authorization === "string" && b.authorization) {
+			const host = new URL(urlStr).hostname.toLowerCase();
+			if (authAllowed(host)) upstreamHeaders.Authorization = b.authorization;
+		}
 
 		const controller = new AbortController();
 		const timer = setTimeout(() => controller.abort(), 45_000);
@@ -62,39 +158,22 @@ export const onRequestPost = async ({
 			const res = await fetch(urlStr, {
 				method: "GET",
 				redirect: "follow",
-				headers: {
-					"User-Agent": "CrackerBox/GodMode",
-					Accept: "text/html,application/xhtml+xml,text/plain,application/json,*/*;q=0.8",
-				},
+				headers: upstreamHeaders,
 				signal: controller.signal,
 			});
-			if (!res.ok) {
-				return Response.json({ error: `Upstream returned HTTP ${res.status}.` }, { status: 502 });
-			}
+			if (!res.ok) return Response.json({ error: `Upstream returned HTTP ${res.status}.` }, { status: 502 });
 			const contentType = res.headers.get("content-type") ?? "";
 			if (contentType.includes("json")) {
 				const text = await res.text();
 				return Response.json({ ok: true, content: text }, { headers: { "Cache-Control": "no-store" } });
 			}
-			// Clamp large bodies so we don't blow memory.
 			const text = (await res.text()).slice(0, 900_000);
-			// Crude HTML→text shrinklet: strip tags so readability stays usable.
-			const plain = contentType.includes("html")
-				? text
-						.replace(/<script[\s\S]*?<\/script>/gi, " ")
-						.replace(/<style[\s\S]*?<\/style>/gi, " ")
-						.replace(/<[^>]+>/g, " ")
-						.replace(/\s{3,}/g, "\n")
-						.trim()
-				: text;
+			const plain = contentType.includes("html") ? stripHtml(text) : text;
 			return Response.json({ ok: true, content: plain.slice(0, 900_000) }, { headers: { "Cache-Control": "no-store" } });
 		} finally {
 			clearTimeout(timer);
 		}
 	} catch (e) {
-		return Response.json(
-			{ error: e instanceof Error ? `Fetch proxy error: ${e.message}` : "Fetch proxy error." },
-			{ status: 502 },
-		);
+		return Response.json({ error: e instanceof Error ? `Proxy error: ${e.message}` : "Proxy error." }, { status: 502 });
 	}
 };

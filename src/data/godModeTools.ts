@@ -1,7 +1,9 @@
 // "God Mode" tools for the Cracker Box chat agent.
 // These give the in-app AI real superpowers it didn't have before:
+//   - web_search  : find things on the web
 //   - web_fetch   : read any public web page / text URL (via Cracker Box's fetch proxy)
-//   - git_clone   : pull a public GitHub repo's files into the current project
+//   - git_clone   : pull a GitHub repo's files into the current project (public OR private —
+//                   private uses the user's saved GitHub token from the vault)
 //
 // Everything funnels through the Cloudflare Pages function at
 // functions/api/fetch.ts, which avoids the browser CORS wall.
@@ -11,11 +13,14 @@ import { shouldIgnoreName, IMPORT_MAX_FILE_BYTES, IMPORT_MAX_TOTAL_BYTES } from 
 
 const PROXY = "/api/fetch";
 
-async function fetchText(url: string): Promise<string> {
+async function fetchText(url: string, auth?: string | null): Promise<string> {
   const res = await fetch(PROXY, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url }),
+    body: JSON.stringify({
+      url,
+      ...(auth ? { authorization: `Bearer ${auth}` } : {}),
+    }),
   });
   const json = (await res.json()) as { ok?: boolean; content?: string; error?: string };
   if (!res.ok || !json.ok) {
@@ -25,6 +30,26 @@ async function fetchText(url: string): Promise<string> {
 }
 
 export const GOD_MODE_TOOLS: ToolDefinition[] = [
+  {
+    type: "function",
+    function: {
+      name: "web_search",
+      description:
+        "Search the web for a query and return a list of top results (title, URL, snippet). " +
+        "Use this when you need to FIND information or pages, then follow up with web_fetch " +
+        "on the most relevant URL to read the full content. Returns up to 10 results.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "The search query, e.g. 'best practices for Home Assistant automation'.",
+          },
+        },
+        required: ["query"],
+      },
+    },
+  },
   {
     type: "function",
     function: {
@@ -51,9 +76,11 @@ export const GOD_MODE_TOOLS: ToolDefinition[] = [
     function: {
       name: "git_clone",
       description:
-        "Clone a PUBLIC GitHub repository into the current project under a 'vendor/' folder, " +
-        "e.g. vendor/owner/repo/. Use this to pull in example code, a library's source, or Cracker Box's " +
-        "own repo so you can study or modify it. Clones the default branch. Skips binaries/oversized files.",
+        "Clone a GitHub repository into the current project under a 'vendor/' folder, " +
+        "e.g. vendor/owner/repo/. Works for public repos and — if a GitHub token is saved in the " +
+        "vault — private ones too. Use this to pull in example code, a library's source, or even " +
+        "Cracker Box's own repo so you can study or modify it. Clones the default branch. " +
+        "Skips binaries/oversized files.",
       parameters: {
         type: "object",
         properties: {
@@ -80,8 +107,8 @@ function parseSlug(repo: string): { owner: string; name: string } {
   return { owner: parts[0], name: parts[1] };
 }
 
-async function defaultBranch(owner: string, name: string): Promise<string> {
-  const json = await fetchText(`https://api.github.com/repos/${owner}/${name}`);
+async function defaultBranch(owner: string, name: string, auth?: string | null): Promise<string> {
+  const json = await fetchText(`https://api.github.com/repos/${owner}/${name}`, auth);
   try {
     const parsed = JSON.parse(json) as { default_branch?: string };
     return parsed.default_branch ?? "main";
@@ -90,8 +117,8 @@ async function defaultBranch(owner: string, name: string): Promise<string> {
   }
 }
 
-async function repoTree(owner: string, name: string, ref: string): Promise<Array<{ path: string; type: string }>> {
-  const json = await fetchText(`https://api.github.com/repos/${owner}/${name}/git/trees/${ref}?recursive=1`);
+async function repoTree(owner: string, name: string, ref: string, auth?: string | null): Promise<Array<{ path: string; type: string }>> {
+  const json = await fetchText(`https://api.github.com/repos/${owner}/${name}/git/trees/${ref}?recursive=1`, auth);
   const parsed = JSON.parse(json) as { tree?: Array<{ path?: string; type?: string }> };
   if (!parsed.tree) {
     const msg = (parsed as unknown as { message?: string }).message;
@@ -111,6 +138,13 @@ async function repoTree(owner: string, name: string, ref: string): Promise<Array
 interface RunnerDeps {
   persistFile: (path: string, content: string) => void;
   refreshTree: () => Promise<void>;
+  githubToken: string | null;
+}
+
+interface SearchResultShape {
+  title?: string;
+  url?: string;
+  snippet?: string;
 }
 
 export async function runGodModeTool(
@@ -118,10 +152,29 @@ export async function runGodModeTool(
   args: Record<string, unknown>,
   deps: RunnerDeps,
 ): Promise<string> {
+  const auth = deps.githubToken ?? null;
+
+  if (name === "web_search") {
+    const query = typeof args.query === "string" ? args.query.trim() : "";
+    if (!query) throw new Error("Provide a search query.");
+    const res = await fetch(PROXY, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ search: query }),
+    });
+    const json = (await res.json()) as { ok?: boolean; search?: { results?: SearchResultShape[]; error?: string } };
+    if (!res.ok || !json.ok) throw new Error(json.search?.error ?? "Search failed.");
+    const results = json.search?.results ?? [];
+    if (results.length === 0) return "No results found.";
+    return results
+      .map((r, i) => `${i + 1}. ${r.title || "Untitled"}\n   ${r.url || ""}\n   ${r.snippet || ""}`)
+      .join("\n\n");
+  }
+
   if (name === "web_fetch") {
     const url = typeof args.url === "string" ? args.url.trim() : "";
     if (!/^https?:\/\//i.test(url)) throw new Error("Provide a full URL starting with http:// or https://.");
-    const content = await fetchText(url);
+    const content = await fetchText(url, auth);
     if (!content.trim()) return "That URL returned no text content.";
     return `Fetched ${url}:\n\n${content.slice(0, 60_000)}`;
   }
@@ -131,9 +184,9 @@ export async function runGodModeTool(
     if (!repo) throw new Error("Provide repo in 'owner/reponame' format.");
     const { owner, name } = parseSlug(repo);
     const requestedRef = typeof args.ref === "string" && args.ref.trim() ? args.ref.trim() : null;
-    const ref = requestedRef ?? (await defaultBranch(owner, name));
+    const ref = requestedRef ?? (await defaultBranch(owner, name, auth));
 
-    const files = await repoTree(owner, name, ref);
+    const files = await repoTree(owner, name, ref, auth);
     const textFiles = files.filter((f) => f.type === "blob");
     if (textFiles.length === 0) throw new Error("No files found in that repo.");
 
@@ -150,7 +203,10 @@ export async function runGodModeTool(
         skipped.push(file.path);
         continue;
       }
-      const raw = await fetchText(`https://raw.githubusercontent.com/${owner}/${name}/${ref}/${encodePath(file.path)}`);
+      const raw = await fetchText(
+        `https://raw.githubusercontent.com/${owner}/${name}/${ref}/${encodePath(file.path)}`,
+        auth,
+      );
       const bytes = new TextEncoder().encode(raw).length;
       if (bytes > IMPORT_MAX_FILE_BYTES) {
         skipped.push(file.path);
@@ -169,8 +225,9 @@ export async function runGodModeTool(
     } catch {
       // refresh is best effort
     }
+    const privateNote = auth ? "" : " (public repo — no GitHub token found; private repos need a token in the vault)";
     const skippedNote = skipped.length ? ` Skipped ${skipped.length} file(s): ${skipped.slice(0, 5).join(", ")}.` : "";
-    return `Cloned ${owner}/${name} @ ${ref} into ${destRoot}/ — ${written} file(s) written.${skippedNote}`;
+    return `Cloned ${owner}/${name} @ ${ref} into ${destRoot}/ — ${written} file(s) written.${skippedNote}${privateNote}`;
   }
 
   throw new Error(`Unknown God Mode tool: ${name}`);
