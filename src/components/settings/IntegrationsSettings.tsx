@@ -29,20 +29,21 @@ export default function IntegrationsSettings({ mcp, vault }: IntegrationsSetting
 
         <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-500">
           Connect to your Home Assistant MCP server so the chat can read entity states, call
-          services, and build dashboards from real data.
+          services, and build dashboards from real data. Works over Nabu Casa — no Home Assistant
+          tab needed, just your HA instance running.
         </p>
 
         <label
           htmlFor="mcp-url"
           className="mb-1 mt-3 block text-[10px] font-semibold uppercase tracking-wider text-zinc-500"
         >
-          MCP server URL
+          MCP server URL (Nabu Casa)
         </label>
         <input
           id="mcp-url"
           value={mcp.url}
           onChange={(e) => mcp.setUrl(e.target.value)}
-          placeholder="http://192.168.1.10:8123/mcp"
+          placeholder="https://your-instance.ui.nabu.casa/mcp"
           className="h-8 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
         />
 
@@ -68,8 +69,8 @@ export default function IntegrationsSettings({ mcp, vault }: IntegrationsSetting
         </div>
         {!hasToken && (
           <p className="mt-2 text-[11px] text-amber-400">
-            If the server rejects the connection, add your Home Assistant long-lived token in
-            Deploy → Connect accounts and reconnect.
+            Add your Home Assistant long-lived token in Deploy → Connect accounts, then connect.
+            The token is required for Nabu Casa.
           </p>
         )}
         {mcp.error && <p className="mt-2 break-words text-[11px] text-red-400">{mcp.error}</p>}

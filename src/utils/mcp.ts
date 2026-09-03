@@ -54,14 +54,19 @@ async function readSseData(stream: ReadableStream<Uint8Array>): Promise<string> 
  */
 export class McpClient {
   private url: string;
+  private target: string;
   private token: string | null;
+  private proxyUrl: string | null;
   private nextId = 1;
   private sessionId: string | null = null;
   private initialized = false;
 
-  constructor(url: string, token: string | null = null) {
-    this.url = url.replace(/\/+$/, "");
+  constructor(url: string, token: string | null = null, proxyUrl: string | null = null) {
+    this.target = url.replace(/\/+$/, "");
     this.token = token;
+    this.proxyUrl = proxyUrl;
+    // When proxying, the fetch URL is the proxy; the real target goes in a header.
+    this.url = proxyUrl ? proxyUrl.replace(/\/+$/, "") : this.target;
   }
 
   private headers(): Record<string, string> {
@@ -71,6 +76,7 @@ export class McpClient {
     };
     if (this.token) h.Authorization = `Bearer ${this.token}`;
     if (this.sessionId) h["Mcp-Session-Id"] = this.sessionId;
+    if (this.proxyUrl) h["x-mcp-target"] = this.target;
     return h;
   }
 

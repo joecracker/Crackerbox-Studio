@@ -4,6 +4,7 @@ import type { McpTool } from "../utils/mcp";
 import type { ToolDefinition } from "./useChatStream";
 
 const KEY = "crackerbox.mcp";
+const PROXY_URL = "/api/mcp";
 
 interface UseMcpOptions {
   token: string | null;
@@ -59,7 +60,7 @@ export function useMcp({ token }: UseMcpOptions): McpController {
     setConnecting(true);
     setError(null);
     try {
-      const client = new McpClient(url.trim(), token);
+      const client = new McpClient(url.trim(), token, PROXY_URL);
       await client.initialize();
       const list = await client.listTools();
       clientRef.current = client;
