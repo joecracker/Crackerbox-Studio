@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import PanelResizer from "../layout/PanelResizer";
 import PreviewCanvas from "./PreviewCanvas";
 import ApprovalCard from "../chat/ApprovalCard";
@@ -165,6 +165,22 @@ export default function LivePreviewPanel({
   const toolbar = usePreviewToolbar();
   const show = toolbar.visible;
   const webMode = browser.mode === "web";
+  const edgeTouch = useRef<{ x: number; y: number } | null>(null);
+
+  const onEdgeTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    edgeTouch.current = { x: t.clientX, y: t.clientY };
+  };
+
+  const onEdgeTouchEnd = (e: React.TouchEvent) => {
+    if (!edgeTouch.current) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - edgeTouch.current.x;
+    const dy = t.clientY - edgeTouch.current.y;
+    edgeTouch.current = null;
+    // Swipe left-to-right across the preview header closes the panel on mobile.
+    if (dx > 60 && Math.abs(dy) < 80 && onClose) onClose();
+  };
 
   return (
     <>
@@ -185,6 +201,8 @@ export default function LivePreviewPanel({
         onPointerLeave={toolbar.handlePointerLeave}
       >
         <header
+          onTouchStart={onEdgeTouchStart}
+          onTouchEnd={onEdgeTouchEnd}
           className={`shrink-0 overflow-hidden border-b border-zinc-800 transition-[height] duration-150 ease-out ${
             show ? "h-[74px]" : "h-1"
           }`}

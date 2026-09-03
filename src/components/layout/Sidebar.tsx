@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import type { ReactNode } from "react";
 
 interface NavItem {
@@ -72,6 +73,7 @@ interface SidebarProps {
   transitioning: boolean;
   activeTab: string;
   onTabChange: (id: string) => void;
+  onClose?: () => void;
   children?: ReactNode;
 }
 
@@ -81,8 +83,28 @@ export default function Sidebar({
   transitioning,
   activeTab,
   onTabChange,
+  onClose,
   children,
 }: SidebarProps) {
+  const touchRef = useRef<{ x: number; y: number } | null>(null);
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchRef.current = { x: t.clientX, y: t.clientY };
+  };
+
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (!touchRef.current) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchRef.current.x;
+    const dy = t.clientY - touchRef.current.y;
+    touchRef.current = null;
+    // Left-swipe on mobile closes the drawer (ignore near-vertical swipes).
+    if (dx < -60 && Math.abs(dy) < 80 && onClose) {
+      onClose();
+    }
+  };
+
   return (
     <aside
       id="app-sidebar"
@@ -96,6 +118,8 @@ export default function Sidebar({
         overflow: "hidden",
         transition: transitioning ? "width 180ms ease" : "none",
       }}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
     >
       <div style={{ width, minWidth: width }} className="flex h-full flex-col bg-zinc-950">
         <div className="px-3 pb-2 pt-3 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">

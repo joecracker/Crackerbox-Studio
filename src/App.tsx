@@ -1141,6 +1141,10 @@ export default function App() {
             transitioning={sidebarAnimating}
             activeTab={sidebarTab}
             onTabChange={setSidebarTab}
+            onClose={() => {
+              sidebarFlash();
+              toggleSidebar();
+            }}
           >
             {sidebarTab === "files" && (
               <FileTreePanel
