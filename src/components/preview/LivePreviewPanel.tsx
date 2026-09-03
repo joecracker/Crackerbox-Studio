@@ -14,6 +14,7 @@ interface LivePreviewPanelProps {
   minWidth: number;
   maxWidth: number;
   onResize: (width: number) => void;
+  onClose?: () => void;
   srcDoc: string | null;
   previewUrl: string | null;
   previewStatus: PreviewStatus;
@@ -159,6 +160,7 @@ export default function LivePreviewPanel({
   preferStatic = false,
   onSnapshot,
   snapshotBusy = false,
+  onClose,
 }: LivePreviewPanelProps) {
   const toolbar = usePreviewToolbar();
   const show = toolbar.visible;
@@ -281,6 +283,19 @@ export default function LivePreviewPanel({
                   <circle cx="8" cy="6" r="1.5" fill="currentColor" stroke="none" />
                 </svg>
               </button>
+              {onClose && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  title="Close preview panel (Ctrl+Shift+P)"
+                  aria-label="Close preview panel"
+                  className="ml-1 flex h-7 w-7 items-center justify-center rounded-md border border-zinc-700 bg-zinc-900 text-zinc-300 transition-colors hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-300 sm:h-6 sm:w-6 sm:border-transparent sm:bg-transparent"
+                >
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  </svg>
+                </button>
+              )}
             </div>
             <AddressBar
               mode={browser.mode}

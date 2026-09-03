@@ -1325,6 +1325,7 @@ export default function App() {
               minWidth={previewMinWidth()}
               maxWidth={previewMaxWidth()}
               onResize={setPreviewWidth}
+              onClose={togglePreview}
               srcDoc={previewDoc}
               previewUrl={previewRuntime.url}
               previewStatus={previewRuntime.status}

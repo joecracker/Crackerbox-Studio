@@ -98,7 +98,8 @@ export default function Composer({
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+    const max = window.matchMedia && window.matchMedia("(max-width: 640px)").matches ? 132 : 200;
+    el.style.height = `${Math.min(el.scrollHeight, max)}px`;
   };
 
   useEffect(() => {
@@ -157,7 +158,7 @@ export default function Composer({
     const el = textareaRef.current;
     if (el) {
       el.style.height = "auto";
-      el.style.height = "60px";
+      el.style.height = "40px";
     }
   };
 
@@ -244,7 +245,7 @@ export default function Composer({
   return (
     <div
       data-native-context-menu=""
-      className="shrink-0 border-t border-zinc-800 px-4 pb-3 pt-2"
+      className="shrink-0 border-t border-zinc-800 px-2 pb-2 pt-1.5 sm:px-4 sm:pb-3 sm:pt-2"
     >
       {attachments.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-1.5">
@@ -359,8 +360,8 @@ export default function Composer({
               ? "Type your answer — e.g. 'yes', 'no', 'skip the delete'"
               : "Ask anything…"
           }
-          className="block w-full resize-none bg-transparent px-3 pb-1 pt-3 text-sm leading-relaxed text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
-          style={{ minHeight: 60, maxHeight: 200, overflowY: "auto" }}
+          className="block w-full resize-none bg-transparent px-3 pb-1 pt-2.5 text-sm leading-relaxed text-zinc-100 placeholder:text-zinc-600 focus:outline-none sm:pt-3"
+          style={{ minHeight: 40, maxHeight: 200, overflowY: "auto" }}
         />
         <div className="flex items-center gap-1 px-2 pb-2">
           <button
