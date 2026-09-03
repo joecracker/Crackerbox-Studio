@@ -303,6 +303,14 @@ export default function DeployWizard({
                 onSave={(value) => void vault.saveToken("homeassistant", value)}
                 onRemove={() => vault.clearToken("homeassistant")}
               />
+              <TokenField
+                label="Tavily API key (web search)"
+                placeholder="tvly-…"
+                token={vault.tokens.tavily ?? ""}
+                hasToken={!!vault.tokens.tavily}
+                onSave={(value) => void vault.saveToken("tavily", value)}
+                onRemove={() => vault.clearToken("tavily")}
+              />
               <p className="text-[11px] leading-relaxed text-zinc-600">
                 The OpenRouter or OpenCode Zen key powers chat in this workspace (pick which in
                 Parameters). Tokens are encrypted with your vault passphrase.

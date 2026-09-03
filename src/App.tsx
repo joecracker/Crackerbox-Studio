@@ -311,6 +311,7 @@ export default function App() {
           persistFile,
           refreshTree: syncFromContainer,
           githubToken: vault.unlocked ? (vault.tokens.github ?? null) : null,
+          tavilyKey: vault.unlocked ? (vault.tokens.tavily ?? null) : null,
         }).catch((e) => `God Mode tool error: ${e instanceof Error ? e.message : e}`);
       }
       return mcp.callTool(name, args);

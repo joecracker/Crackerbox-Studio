@@ -118,8 +118,45 @@ function parseDdgLiteResults(html: string): SearchResult[] {
 const SEARCH_UA =
 	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
-async function runSearch(query: string): Promise<{ results: SearchResult[] } | { error: string }> {
-	// Try DuckDuckGo Lite first (more reliable from datacenter IPs).
+async function runTavilySearch(
+	query: string,
+	apiKey: string,
+): Promise<{ results: SearchResult[] } | { error: string }> {
+	const res = await fetch("https://api.tavily.com/search", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			api_key: apiKey,
+			query,
+			search_depth: "basic",
+			max_results: 10,
+			include_answer: false,
+		}),
+	});
+	if (!res.ok) return { error: `Tavily returned HTTP ${res.status}.` };
+	const json = (await res.json()) as {
+		results?: Array<{ title?: string; url?: string; content?: string }>;
+	};
+	const results: SearchResult[] = (json.results ?? []).map((r) => ({
+		title: r.title ?? "",
+		url: r.url ?? "",
+		snippet: r.content ?? "",
+	}));
+	if (results.length === 0) return { error: "Tavily returned no results." };
+	return { results };
+}
+
+async function runSearch(
+	query: string,
+	tavilyKey: string | null,
+): Promise<{ results: SearchResult[] } | { error: string }> {
+	// Preferred: Tavily (reliable, clean API) when the user has a key saved.
+	if (tavilyKey) {
+		const viaTavily = await runTavilySearch(query, tavilyKey);
+		if (!("error" in viaTavily) || viaTavily.results.length > 0) return viaTavily;
+	}
+	// Fallback: DuckDuckGo Lite first, then HTML (may be bot-challenged from
+	// datacenter IPs, but worth a try when no key is configured).
 	const lite = await fetch(`https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`, {
 		method: "GET",
 		headers: { "User-Agent": SEARCH_UA },
@@ -129,7 +166,6 @@ async function runSearch(query: string): Promise<{ results: SearchResult[] } | {
 		const results = parseDdgLiteResults(html);
 		if (results.length > 0) return { results };
 	}
-	// Fallback to the classic HTML endpoint.
 	const htmlRes = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
 		method: "GET",
 		headers: { "User-Agent": SEARCH_UA },
@@ -139,7 +175,7 @@ async function runSearch(query: string): Promise<{ results: SearchResult[] } | {
 		const results = parseDdgResults(html);
 		if (results.length > 0) return { results };
 	}
-	return { error: "No results returned by the search provider." };
+	return { error: tavilyKey ? "Search failed (Tavily)." : "No results returned by the search provider (add a Tavily key in Deploy → Connect accounts for reliable search)." };
 }
 
 // Gate: only allow GitHub domains to receive a supplied auth token so it can't
@@ -164,12 +200,17 @@ export const onRequestPost = async ({ request }: { request: Request; env: Env })
 			url?: string;
 			search?: string;
 			authorization?: string;
+			tavilyKey?: string;
 		};
 
 		// MODE 1: web search
 		if (typeof b.search === "string" && b.search.trim()) {
 			const q = b.search.trim().slice(0, 200);
-			const result = await runSearch(q);
+			const tavilyKey =
+				typeof b.tavilyKey === "string" && b.tavilyKey.trim()
+					? b.tavilyKey.trim().slice(0, 200)
+					: null;
+			const result = await runSearch(q, tavilyKey);
 			return Response.json({ ok: true, search: result }, { headers: { "Cache-Control": "no-store" } });
 		}
 

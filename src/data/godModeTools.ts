@@ -37,7 +37,9 @@ export const GOD_MODE_TOOLS: ToolDefinition[] = [
       description:
         "Search the web for a query and return a list of top results (title, URL, snippet). " +
         "Use this when you need to FIND information or pages, then follow up with web_fetch " +
-        "on the most relevant URL to read the full content. Returns up to 10 results.",
+        "on the most relevant URL to read the full content. Uses Tavily when a key is saved " +
+        "in the vault (reliable), otherwise falls back to DuckDuckGo (may be limited). " +
+        "Returns up to 10 results.",
       parameters: {
         type: "object",
         properties: {
@@ -139,6 +141,7 @@ interface RunnerDeps {
   persistFile: (path: string, content: string) => void;
   refreshTree: () => Promise<void>;
   githubToken: string | null;
+  tavilyKey: string | null;
 }
 
 interface SearchResultShape {
@@ -160,12 +163,15 @@ export async function runGodModeTool(
     const res = await fetch(PROXY, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ search: query }),
+      body: JSON.stringify({
+        search: query,
+        ...(deps.tavilyKey ? { tavilyKey: deps.tavilyKey } : {}),
+      }),
     });
     const json = (await res.json()) as { ok?: boolean; search?: { results?: SearchResultShape[]; error?: string } };
     if (!res.ok || !json.ok) throw new Error(json.search?.error ?? "Search failed.");
     const results = json.search?.results ?? [];
-    if (results.length === 0) return "No results found.";
+    if (results.length === 0) return json.search?.error ?? "No results found.";
     return results
       .map((r, i) => `${i + 1}. ${r.title || "Untitled"}\n   ${r.url || ""}\n   ${r.snippet || ""}`)
       .join("\n\n");

@@ -8,6 +8,7 @@ export type TokenService =
   | "netlify"
   | "openrouter"
   | "opencode"
+  | "tavily"
   | "cloudflare"
   | "homeassistant";
 
@@ -16,6 +17,7 @@ interface VaultState {
   netlify: EncryptedPayload | null;
   openrouter: EncryptedPayload | null;
   opencode: EncryptedPayload | null;
+  tavily: EncryptedPayload | null;
   cloudflare: EncryptedPayload | null;
   homeassistant: EncryptedPayload | null;
 }
@@ -29,6 +31,7 @@ const EMPTY_VAULT: VaultState = {
   netlify: null,
   openrouter: null,
   opencode: null,
+  tavily: null,
   cloudflare: null,
   homeassistant: null,
 };
@@ -74,6 +77,7 @@ export function useTokenVault(): TokenVault {
       if (vault.netlify) result.netlify = await decryptToken(phrase, vault.netlify);
       if (vault.openrouter) result.openrouter = await decryptToken(phrase, vault.openrouter);
       if (vault.opencode) result.opencode = await decryptToken(phrase, vault.opencode);
+      if (vault.tavily) result.tavily = await decryptToken(phrase, vault.tavily);
       if (vault.cloudflare) result.cloudflare = await decryptToken(phrase, vault.cloudflare);
       if (vault.homeassistant) result.homeassistant = await decryptToken(phrase, vault.homeassistant);
       setPassphrase(phrase);
