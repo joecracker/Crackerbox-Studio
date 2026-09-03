@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { DemoFile } from "../../data/demoFiles";
 import type { TokenVault } from "../../hooks/useTokenVault";
 import type { DeployQueue } from "../../hooks/useDeployQueue";
@@ -186,6 +186,45 @@ export default function DeployWizard({
     void vault.unlock(passphrase, trustDevice);
   };
 
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [transferStatus, setTransferStatus] = useState<string | null>(null);
+
+  const handleExportVault = () => {
+    try {
+      const json = vault.exportTokens();
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `crackerbox-vault-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setTransferStatus("Exported. Send the file to your other device.");
+    } catch (e) {
+      setTransferStatus(e instanceof Error ? e.message : "Export failed.");
+    }
+  };
+
+  const handleImportVaultFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) {
+      setTransferStatus(null);
+      return;
+    }
+    try {
+      const text = await file.text();
+      const { imported } = await vault.importTokens(text);
+      setTransferStatus(
+        imported.length
+          ? `Imported ${imported.length} token(s): ${imported.join(", ")}.`
+          : "No tokens were imported — unlock the vault first or check the file.",
+      );
+    } catch (err) {
+      setTransferStatus(err instanceof Error ? err.message : "Import failed.");
+    }
+  };
+
   const handleDeploy = async () => {
     setDeploying(true);
     setDeployError(null);
@@ -322,6 +361,35 @@ export default function DeployWizard({
               >
                 Lock vault
               </button>
+              <div className="flex flex-wrap items-center gap-2 border-t border-zinc-800/60 pt-3">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                  Move tokens between devices
+                </span>
+                <button
+                  type="button"
+                  onClick={handleExportVault}
+                  className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:border-sky-600 hover:text-sky-300"
+                >
+                  Export tokens…
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:border-sky-600 hover:text-sky-300"
+                >
+                  Import tokens…
+                </button>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={handleImportVaultFile}
+                />
+                {transferStatus && (
+                  <p className="w-full break-words text-[11px] text-sky-400/90">{transferStatus}</p>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => setStep("configure")}

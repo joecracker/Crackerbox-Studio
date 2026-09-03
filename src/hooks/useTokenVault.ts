@@ -50,6 +50,8 @@ export interface TokenVault {
   lock: () => void;
   saveToken: (service: TokenService, token: string) => Promise<void>;
   clearToken: (service: TokenService) => void;
+  exportTokens: () => string;
+  importTokens: (json: string) => Promise<{ imported: TokenService[]; skipped: string[] }>;
   busy: boolean;
   error: string | null;
 }
@@ -127,6 +129,50 @@ export function useTokenVault(): TokenVault {
     });
   };
 
+  // Export the decrypted tokens as a JSON file string so the user can move them
+  // between devices. Only available while unlocked (tokens are in memory then).
+  const exportTokens = () => {
+    if (!passphrase) throw new Error("Unlock the vault first to export tokens.");
+    const filtered: TokenMap = {};
+    for (const [k, v] of Object.entries(tokens)) {
+      if (v) filtered[k as TokenService] = v;
+    }
+    return JSON.stringify({ app: "crackerbox", kind: "vault", exportedAt: new Date().toISOString(), tokens: filtered }, null, 2);
+  };
+
+  // Import a vault export file and re-encrypt each token with THIS device's
+  // passphrase (the target device must be unlocked). Returns what was imported.
+  const importTokens = async (json: string): Promise<{ imported: TokenService[]; skipped: string[] }> => {
+    if (!passphrase) throw new Error("Unlock the vault first to import tokens.");
+    let parsed: { tokens?: TokenMap };
+    try {
+      parsed = JSON.parse(json) as { tokens?: TokenMap };
+    } catch {
+      throw new Error("That doesn't look like a vault export file.");
+    }
+    const incoming = parsed.tokens ?? {};
+    const imported: TokenService[] = [];
+    const skipped: string[] = [];
+    const services = [
+      "github",
+      "netlify",
+      "openrouter",
+      "opencode",
+      "tavily",
+      "cloudflare",
+      "homeassistant",
+    ] as const;
+    for (const service of services) {
+      const val = incoming[service];
+      if (typeof val === "string" && val.trim()) {
+        await saveToken(service, val.trim());
+        imported.push(service);
+      }
+    }
+    if (imported.length === 0) skipped.push("No recognized tokens were found in that file.");
+    return { imported, skipped };
+  };
+
   return {
     unlocked: passphrase !== null,
     trusted: passphrase === TRUSTED_SENTINEL,
@@ -136,6 +182,8 @@ export function useTokenVault(): TokenVault {
     lock,
     saveToken,
     clearToken,
+    exportTokens,
+    importTokens,
     busy,
     error,
   };
