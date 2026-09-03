@@ -201,6 +201,9 @@ export const onRequestPost = async ({ request }: { request: Request; env: Env })
 			search?: string;
 			authorization?: string;
 			tavilyKey?: string;
+			method?: string;
+			jsonBody?: unknown;
+			textBody?: string;
 		};
 
 		// MODE 1: web search
@@ -232,10 +235,26 @@ export const onRequestPost = async ({ request }: { request: Request; env: Env })
 		const controller = new AbortController();
 		const timer = setTimeout(() => controller.abort(), 45_000);
 		try {
+			const method = b.method === "POST" ? "POST" : "GET";
+			let bodyBytes: string | undefined;
+			let contentType = upstreamHeaders["Content-Type"] ?? "";
+			if (method === "POST") {
+				if (b.jsonBody !== undefined && b.jsonBody !== null) {
+					bodyBytes = JSON.stringify(b.jsonBody);
+					contentType = "application/json";
+				} else if (typeof b.textBody === "string") {
+					bodyBytes = b.textBody;
+					if (!contentType) contentType = "application/json";
+				}
+			}
 			const res = await fetch(urlStr, {
-				method: "GET",
+				method,
 				redirect: "follow",
-				headers: upstreamHeaders,
+				headers: {
+					...upstreamHeaders,
+					...(contentType ? { "Content-Type": contentType } : {}),
+				},
+				body: bodyBytes,
 				signal: controller.signal,
 			});
 			if (!res.ok) return Response.json({ error: `Upstream returned HTTP ${res.status}.` }, { status: 502 });

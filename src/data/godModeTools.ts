@@ -10,16 +10,28 @@
 
 import type { ToolDefinition } from "../hooks/useChatStream";
 import { shouldIgnoreName, IMPORT_MAX_FILE_BYTES, IMPORT_MAX_TOTAL_BYTES } from "../utils/ignoreRules";
+import { CRACKER_BOX_GUIDE } from "./crackerBoxGuide";
 
 const PROXY = "/api/fetch";
 
-async function fetchText(url: string, auth?: string | null): Promise<string> {
+async function fetchText(
+  url: string,
+  opts?: {
+    auth?: string | null;
+    method?: string;
+    jsonBody?: unknown;
+    textBody?: string;
+  },
+): Promise<string> {
   const res = await fetch(PROXY, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       url,
-      ...(auth ? { authorization: `Bearer ${auth}` } : {}),
+      ...(opts?.auth ? { authorization: `Bearer ${opts.auth}` } : {}),
+      ...(opts?.method ? { method: opts.method } : {}),
+      ...(opts?.jsonBody !== undefined ? { jsonBody: opts.jsonBody } : {}),
+      ...(opts?.textBody !== undefined ? { textBody: opts.textBody } : {}),
     }),
   });
   const json = (await res.json()) as { ok?: boolean; content?: string; error?: string };
@@ -58,18 +70,46 @@ export const GOD_MODE_TOOLS: ToolDefinition[] = [
       name: "web_fetch",
       description:
         "Fetch the text content of a public web page or URL and return it as readable text. " +
-        "Great for reading docs, APIs that return plain text/JSON, blog posts, or looking up " +
-        "anything on the open web. The content is fetched through Cracker Box's proxy, so it " +
-        "works without CORS limits. Pages longer than ~900KB are truncated.",
+        "Works for GET and POST. Great for reading docs, JSON APIs, blog posts, or calling " +
+        "read-only APIs that need POST with a JSON body. Fetched through Cracker Box's proxy, " +
+        "so no CORS limits. Pages longer than ~900KB are truncated. Private/IP hosts are blocked.",
       parameters: {
         type: "object",
         properties: {
           url: {
             type: "string",
-            description: "The full http/https URL to fetch, e.g. 'https://opencode.ai/docs/'. Must be a public URL.",
+            description: "The full http/https URL to fetch, e.g. 'https://opencode.ai/docs/' or 'https://api.example.com/search'. Must be a public URL.",
+          },
+          method: {
+            type: "string",
+            enum: ["GET", "POST"],
+            description: "HTTP method. Default GET. Use POST for APIs that need a request body.",
+          },
+          jsonBody: {
+            type: "object",
+            description: "Optional JSON body for POST requests, e.g. { \"query\": \"foo\" }. Sent as application/json.",
+          },
+          textBody: {
+            type: "string",
+            description: "Optional raw text/JSON string body for POST requests (use instead of jsonBody if you have a raw payload).",
           },
         },
         required: ["url"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "self_inspect",
+      description:
+        "Read Cracker Box's own identity and capabilities instantly: app name, version, how the " +
+        "vault/providers/tools work, and what you (the agent) can do. Use this before explaining " +
+        "yourself to the user or when asked 'what are you / how do you work / can you do X'. " +
+        "Fast, no clone needed.",
+      parameters: {
+        type: "object",
+        properties: {},
       },
     },
   },
@@ -110,7 +150,7 @@ function parseSlug(repo: string): { owner: string; name: string } {
 }
 
 async function defaultBranch(owner: string, name: string, auth?: string | null): Promise<string> {
-  const json = await fetchText(`https://api.github.com/repos/${owner}/${name}`, auth);
+  const json = await fetchText(`https://api.github.com/repos/${owner}/${name}`, { auth });
   try {
     const parsed = JSON.parse(json) as { default_branch?: string };
     return parsed.default_branch ?? "main";
@@ -120,7 +160,7 @@ async function defaultBranch(owner: string, name: string, auth?: string | null):
 }
 
 async function repoTree(owner: string, name: string, ref: string, auth?: string | null): Promise<Array<{ path: string; type: string }>> {
-  const json = await fetchText(`https://api.github.com/repos/${owner}/${name}/git/trees/${ref}?recursive=1`, auth);
+  const json = await fetchText(`https://api.github.com/repos/${owner}/${name}/git/trees/${ref}?recursive=1`, { auth });
   const parsed = JSON.parse(json) as { tree?: Array<{ path?: string; type?: string }> };
   if (!parsed.tree) {
     const msg = (parsed as unknown as { message?: string }).message;
@@ -157,6 +197,18 @@ export async function runGodModeTool(
 ): Promise<string> {
   const auth = deps.githubToken ?? null;
 
+  if (name === "self_inspect") {
+    return (
+      "You are the assistant inside Cracker Box Studio. Here is your built-in knowledge of " +
+      "yourself and your capabilities:\n\n" +
+      CRACKER_BOX_GUIDE +
+      "\n\nTools you can call: web_search, web_fetch (GET/POST), git_clone (public + private), " +
+      "self_inspect, plus workspace tools (list/read/write/delete files, run commands) and Home " +
+      "Assistant MCP tools when connected. Providers: OpenRouter or OpenCode Zen (chosen in " +
+      "Parameters). To see your own source code, use git_clone on joecracker/Crackerbox-Studio."
+    );
+  }
+
   if (name === "web_search") {
     const query = typeof args.query === "string" ? args.query.trim() : "";
     if (!query) throw new Error("Provide a search query.");
@@ -180,7 +232,13 @@ export async function runGodModeTool(
   if (name === "web_fetch") {
     const url = typeof args.url === "string" ? args.url.trim() : "";
     if (!/^https?:\/\//i.test(url)) throw new Error("Provide a full URL starting with http:// or https://.");
-    const content = await fetchText(url, auth);
+    const method = args.method === "POST" ? "POST" : "GET";
+    const content = await fetchText(url, {
+      auth,
+      method,
+      jsonBody: args.jsonBody,
+      textBody: typeof args.textBody === "string" ? args.textBody : undefined,
+    });
     if (!content.trim()) return "That URL returned no text content.";
     return `Fetched ${url}:\n\n${content.slice(0, 60_000)}`;
   }
@@ -211,7 +269,7 @@ export async function runGodModeTool(
       }
       const raw = await fetchText(
         `https://raw.githubusercontent.com/${owner}/${name}/${ref}/${encodePath(file.path)}`,
-        auth,
+        { auth },
       );
       const bytes = new TextEncoder().encode(raw).length;
       if (bytes > IMPORT_MAX_FILE_BYTES) {
