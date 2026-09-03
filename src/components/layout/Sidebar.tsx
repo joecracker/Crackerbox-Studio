@@ -6,15 +6,16 @@ interface NavItem {
   icon: ReactNode;
 }
 
-function ChatIcon() {
+function FilesIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path
-        d="M3 2.5h10a.75.75 0 0 1 .75.75v6a.75.75 0 0 1-.75.75H6.4l-2.9 2.9a.5.5 0 0 1-.85-.35V10.7H3a.75.75 0 0 1-.75-.75v-6A.75.75 0 0 1 3 2.5Z"
+        d="M4 2.5h5.5L12.5 6v7.5a1 1 0 0 1-1 1h-7.5a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1Z"
         stroke="currentColor"
         strokeWidth="1.2"
         strokeLinejoin="round"
       />
+      <path d="M9.5 2.5v3.5H13" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -59,7 +60,7 @@ function SlidersIcon() {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: "chat", label: "Chat", icon: <ChatIcon /> },
+  { id: "files", label: "Files", icon: <FilesIcon /> },
   { id: "projects", label: "Projects", icon: <FolderIcon /> },
   { id: "deploy", label: "Deploy", icon: <RocketIcon /> },
   { id: "settings", label: "Settings", icon: <SlidersIcon /> },

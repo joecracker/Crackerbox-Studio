@@ -31,8 +31,6 @@ import type { PaletteCommand } from "./components/commands/CommandPalette";
 import type { ShortcutItem } from "./components/commands/ShortcutsDialog";
 import type { ContextMenuItem } from "./components/commands/ContextMenu";
 import {
-  FILE_TREE_MAX,
-  FILE_TREE_MIN,
   SIDEBAR_MAX,
   SIDEBAR_MIN,
   useLayout,
@@ -144,10 +142,6 @@ export default function App() {
     setPreviewWidth,
     previewMinWidth,
     previewMaxWidth,
-    fileTreeWidth,
-    fileTreeCollapsed,
-    setFileTreeWidth,
-    toggleFileTree,
     togglePreview,
     terminalOpen,
     terminalHeight,
@@ -155,7 +149,6 @@ export default function App() {
     setTerminalHeight,
   } = useLayout();
   const [sidebarAnimating, sidebarFlash] = useTransientFlag(220);
-  const [treeAnimating, treeFlash] = useTransientFlag(220);
   const { zen, toggleZen, exitZen } = useZenMode();
   const zenToggleRef = useRef<HTMLButtonElement>(null);
   const parametersToggleRef = useRef<HTMLButtonElement>(null);
@@ -802,8 +795,18 @@ export default function App() {
   };
 
   const handleToggleFileTree = () => {
-    treeFlash();
-    toggleFileTree();
+    // Unified drawer: the "Files" header button opens the one workspace drawer
+    // to the Files tab, or closes it if Files is already showing.
+    if (!sidebarCollapsed && sidebarTab === "files") {
+      sidebarFlash();
+      toggleSidebar();
+      return;
+    }
+    setSidebarTab("files");
+    if (sidebarCollapsed) {
+      sidebarFlash();
+      toggleSidebar();
+    }
   };
 
   const handleCloseParameters = () => {
@@ -1098,13 +1101,13 @@ export default function App() {
       edits.clearAll();
       fileTree.deselectFile();
       fileTree.setQuery("");
-      setSidebarTab("chat");
+      setSidebarTab("files");
       previewApprovalResolverRef.current?.(false);
       previewApprovalResolverRef.current = null;
       setPreviewApproval(null);
-      if (fileTreeCollapsed) handleToggleFileTree();
+      if (sidebarCollapsed || sidebarTab !== "files") handleToggleFileTree();
     }
-  }, [projects.activeProjectId, edits, fileTree, fileTreeCollapsed, handleToggleFileTree]);
+  }, [projects.activeProjectId, edits, fileTree, sidebarCollapsed, sidebarTab, handleToggleFileTree]);
 
   if (zen) return <ZenView onExit={exitZen} srcDoc={previewDoc} busy={chatStream.busy} />;
 
@@ -1116,7 +1119,7 @@ export default function App() {
         onContextMenu={handleShellContextMenu}
       >
         <AppHeader
-          fileTreeCollapsed={fileTreeCollapsed}
+          fileTreeCollapsed={sidebarCollapsed || sidebarTab !== "files"}
           onToggleFileTree={handleToggleFileTree}
           sidebarCollapsed={sidebarCollapsed}
           onToggleSidebar={handleToggleSidebar}
@@ -1132,40 +1135,6 @@ export default function App() {
           onTogglePreview={togglePreview}
         />
         <div className="flex min-h-0 flex-1">
-          <FileTreePanel
-            width={fileTreeWidth}
-            collapsed={fileTreeCollapsed}
-            transitioning={treeAnimating}
-            activePath={fileTree.activePath}
-            expanded={fileTree.expanded}
-            query={fileTree.query}
-            nodes={fileTree.filtered}
-            onSelect={handleFileSelect}
-            onToggle={fileTree.toggleExpanded}
-            onQueryChange={fileTree.setQuery}
-            onContextMenuFile={handleFileContextMenu}
-            pendingPaths={pendingPaths}
-            realFolder={realFolder}
-            sessionCredits={{
-              tokenCount: contextGuard.tokenCount,
-              contextLength: contextGuard.contextLength,
-              contextPercent: contextGuard.percent,
-              contextLevel: contextGuard.level,
-              credits: credits.credits,
-              creditsLoading: credits.loading,
-              creditsError: credits.error,
-              onRefreshCredits: credits.refresh,
-            }}
-          />
-          {!fileTreeCollapsed && (
-            <PanelResizer
-              width={fileTreeWidth}
-              minWidth={FILE_TREE_MIN}
-              maxWidth={FILE_TREE_MAX}
-              onResize={setFileTreeWidth}
-              label="Resize file tree"
-            />
-          )}
           <Sidebar
             width={sidebarWidth}
             collapsed={sidebarCollapsed}
@@ -1173,6 +1142,30 @@ export default function App() {
             activeTab={sidebarTab}
             onTabChange={setSidebarTab}
           >
+            {sidebarTab === "files" && (
+              <FileTreePanel
+                activePath={fileTree.activePath}
+                expanded={fileTree.expanded}
+                query={fileTree.query}
+                nodes={fileTree.filtered}
+                onSelect={handleFileSelect}
+                onToggle={fileTree.toggleExpanded}
+                onQueryChange={fileTree.setQuery}
+                onContextMenuFile={handleFileContextMenu}
+                pendingPaths={pendingPaths}
+                realFolder={realFolder}
+                sessionCredits={{
+                  tokenCount: contextGuard.tokenCount,
+                  contextLength: contextGuard.contextLength,
+                  contextPercent: contextGuard.percent,
+                  contextLevel: contextGuard.level,
+                  credits: credits.credits,
+                  creditsLoading: credits.loading,
+                  creditsError: credits.error,
+                  onRefreshCredits: credits.refresh,
+                }}
+              />
+            )}
             {sidebarTab === "projects" && (
               <ProjectLibrary
                 projects={projects.projects}
