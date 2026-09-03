@@ -1,8 +1,6 @@
 import type { Ref } from "react";
 
 interface AppHeaderProps {
-  fileTreeCollapsed: boolean;
-  onToggleFileTree: () => void;
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
   zenActive: boolean;
@@ -18,8 +16,6 @@ interface AppHeaderProps {
 }
 
 export default function AppHeader({
-  fileTreeCollapsed,
-  onToggleFileTree,
   sidebarCollapsed,
   onToggleSidebar,
   zenActive,
@@ -35,25 +31,6 @@ export default function AppHeader({
 }: AppHeaderProps) {
   return (
     <header className="flex h-12 shrink-0 items-center gap-1.5 border-b border-zinc-800 bg-zinc-950 px-3 sm:gap-2">
-      <button
-        type="button"
-        onClick={onToggleFileTree}
-        title="Toggle file tree (Ctrl+Shift+E)"
-        aria-label={fileTreeCollapsed ? "Show file tree" : "Hide file tree"}
-        aria-expanded={!fileTreeCollapsed}
-        aria-controls="app-filetree"
-        className="flex h-8 items-center gap-1.5 rounded-md px-2 text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
-      >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path
-            d="M1.75 4.25a1 1 0 0 1 1-1h3l1.2 1.5h6.3a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-10.5a1 1 0 0 1-1-1v-7.5Z"
-            stroke="currentColor"
-            strokeWidth="1.3"
-            strokeLinejoin="round"
-          />
-        </svg>
-        <span className="hidden text-xs font-medium sm:inline">Files</span>
-      </button>
       <button
         type="button"
         onClick={onToggleSidebar}

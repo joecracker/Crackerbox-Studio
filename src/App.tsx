@@ -1119,8 +1119,6 @@ export default function App() {
         onContextMenu={handleShellContextMenu}
       >
         <AppHeader
-          fileTreeCollapsed={sidebarCollapsed || sidebarTab !== "files"}
-          onToggleFileTree={handleToggleFileTree}
           sidebarCollapsed={sidebarCollapsed}
           onToggleSidebar={handleToggleSidebar}
           zenActive={zen}
