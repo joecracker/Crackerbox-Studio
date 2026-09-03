@@ -20,6 +20,7 @@ import ChatView from "./components/chat/ChatView";
 import TerminalPanel from "./components/terminal/TerminalPanel";
 import ParametersDialog from "./components/parameters/ParametersDialog";
 import TokenCounter from "./components/parameters/TokenCounter";
+import { useOpenRouterCredits } from "./hooks/useOpenRouterCredits";
 import ZenView from "./components/zen/ZenView";
 import CommandPalette from "./components/commands/CommandPalette";
 import ShortcutsDialog from "./components/commands/ShortcutsDialog";
@@ -730,6 +731,9 @@ export default function App() {
     markDirty: deployQueue.markDirty,
   });
 
+  const creditsApiKey = vault.unlocked ? vault.tokens.openrouter ?? null : null;
+  const credits = useOpenRouterCredits(creditsApiKey);
+
   const sendBlockedReason = !parameters.selectedModelId
     ? "No model selected — open Parameters (Ctrl+Shift+,) to pick one."
     : !vault.unlocked
@@ -1125,6 +1129,16 @@ export default function App() {
             onContextMenuFile={handleFileContextMenu}
             pendingPaths={pendingPaths}
             realFolder={realFolder}
+            sessionCredits={{
+              tokenCount: contextGuard.tokenCount,
+              contextLength: contextGuard.contextLength,
+              contextPercent: contextGuard.percent,
+              contextLevel: contextGuard.level,
+              credits: credits.credits,
+              creditsLoading: credits.loading,
+              creditsError: credits.error,
+              onRefreshCredits: credits.refresh,
+            }}
           />
           {!fileTreeCollapsed && (
             <PanelResizer

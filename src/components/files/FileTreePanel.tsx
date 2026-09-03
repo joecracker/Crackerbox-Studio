@@ -1,6 +1,8 @@
 import type { DemoFile } from "../../data/demoFiles";
 import FileTree from "./FileTree";
+import SessionCredits from "./SessionCredits";
 import type { RealFolderControls } from "../../hooks/useRealFolder";
+import type { OpenRouterCredits } from "../../hooks/useOpenRouterCredits";
 
 interface FileTreePanelProps {
   width: number;
@@ -16,6 +18,16 @@ interface FileTreePanelProps {
   onContextMenuFile?: (path: string, x: number, y: number) => void;
   pendingPaths?: Set<string>;
   realFolder?: RealFolderControls;
+  sessionCredits?: {
+    tokenCount: number;
+    contextLength: number | null;
+    contextPercent: number | null;
+    contextLevel: "ok" | "soft" | "hard" | "unknown";
+    credits: OpenRouterCredits;
+    creditsLoading: boolean;
+    creditsError: string | null;
+    onRefreshCredits: () => void;
+  };
 }
 
 export default function FileTreePanel({
@@ -32,6 +44,7 @@ export default function FileTreePanel({
   onContextMenuFile,
   pendingPaths,
   realFolder,
+  sessionCredits,
 }: FileTreePanelProps) {
   return (
     <aside
@@ -145,8 +158,23 @@ export default function FileTreePanel({
           onContextMenuFile={onContextMenuFile}
           pendingPaths={pendingPaths}
         />
-        <div className="mt-auto shrink-0 truncate border-t border-zinc-800 px-3 py-2 text-[11px] text-zinc-500">
-          {activePath ? activePath : "No file selected"}
+        <div className="mt-auto shrink-0">
+          {sessionCredits ? (
+            <SessionCredits
+              tokenCount={sessionCredits.tokenCount}
+              contextLength={sessionCredits.contextLength}
+              contextPercent={sessionCredits.contextPercent}
+              contextLevel={sessionCredits.contextLevel}
+              credits={sessionCredits.credits}
+              creditsLoading={sessionCredits.creditsLoading}
+              creditsError={sessionCredits.creditsError}
+              onRefreshCredits={sessionCredits.onRefreshCredits}
+            />
+          ) : (
+            <div className="truncate border-t border-zinc-800 px-3 py-2 text-[11px] text-zinc-500">
+              {activePath ? activePath : "No file selected"}
+            </div>
+          )}
         </div>
       </div>
     </aside>
