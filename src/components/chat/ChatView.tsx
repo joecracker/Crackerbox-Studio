@@ -1,19 +1,14 @@
-import type { ChatMessage, ChatSession } from "../../hooks/useChatHistory";
+import type { ChatMessage } from "../../hooks/useChatHistory";
 import type { PendingApproval } from "../../hooks/useChatStream";
 import Composer from "./Composer";
 import MessageList from "./MessageList";
 import ApprovalCard from "./ApprovalCard";
-import SessionSwitcher from "./SessionSwitcher";
 
 interface ChatViewProps {
   projectName: string;
   messages: ChatMessage[];
-  sessions: ChatSession[];
   activeSessionId: string | null;
-  onSelectSession: (id: string) => void;
   onCreateSession: () => void;
-  onRenameSession: (id: string) => void;
-  onDeleteSession: (id: string) => void;
   onSend: (text: string, attachments: ChatMessage["attachments"]) => void;
   onOpenParameters: () => void;
   streaming: boolean;
@@ -35,12 +30,8 @@ interface ChatViewProps {
 export default function ChatView({
   projectName,
   messages,
-  sessions,
   activeSessionId,
-  onSelectSession,
   onCreateSession,
-  onRenameSession,
-  onDeleteSession,
   onSend,
   onOpenParameters,
   streaming,
@@ -62,16 +53,19 @@ export default function ChatView({
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="flex h-9 shrink-0 items-center gap-2 border-b border-zinc-800 px-4">
         <span className="truncate text-xs font-medium text-zinc-300">{projectName}</span>
-        <span className="ml-auto shrink-0 text-[11px] text-zinc-600">chat</span>
+        <span className="ml-auto truncate text-[11px] text-zinc-600">chat</span>
+        <button
+          type="button"
+          onClick={onCreateSession}
+          title="Start a new chat"
+          className="flex shrink-0 items-center gap-1 rounded-md border border-zinc-800 px-2 py-1 text-[11px] text-zinc-400 transition-colors hover:border-sky-600 hover:text-sky-300"
+        >
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          New chat
+        </button>
       </div>
-      <SessionSwitcher
-        sessions={sessions}
-        activeSessionId={activeSessionId}
-        onSelect={onSelectSession}
-        onCreate={onCreateSession}
-        onRename={onRenameSession}
-        onDelete={onDeleteSession}
-      />
       <MessageList key={activeSessionId ?? "session"} messages={messages} streaming={streaming} />
       {!runtimeAvailable && (
         <div className="mx-4 mb-2 flex items-start gap-2 rounded-md border border-amber-900/60 bg-amber-950/40 px-3 py-2">

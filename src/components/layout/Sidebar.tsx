@@ -49,6 +49,15 @@ function RocketIcon() {
   );
 }
 
+function HistoryIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="7" cy="8" r="4.5" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M7 5.5V8l1.8 1.4M3.2 3.6 2 2.2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function SlidersIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -63,6 +72,7 @@ function SlidersIcon() {
 const NAV_ITEMS: NavItem[] = [
   { id: "files", label: "Files", icon: <FilesIcon /> },
   { id: "projects", label: "Projects", icon: <FolderIcon /> },
+  { id: "history", label: "History", icon: <HistoryIcon /> },
   { id: "deploy", label: "Deploy", icon: <RocketIcon /> },
   { id: "settings", label: "Settings", icon: <SlidersIcon /> },
 ];

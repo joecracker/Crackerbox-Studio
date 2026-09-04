@@ -1,0 +1,134 @@
+import type { ChatSession } from "../../hooks/useChatHistory";
+import { sessionTokenCount } from "../../hooks/useChatHistory";
+
+interface ChatHistoryPanelProps {
+  sessions: ChatSession[];
+  activeSessionId: string | null;
+  onSelect: (id: string) => void;
+  onCreate: () => void;
+  onRename: (id: string) => void;
+  onDelete: (id: string) => void;
+}
+
+function formatDate(ts: number): string {
+  return new Date(ts).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+export default function ChatHistoryPanel({
+  sessions,
+  activeSessionId,
+  onSelect,
+  onCreate,
+  onRename,
+  onDelete,
+}: ChatHistoryPanelProps) {
+  const sorted = [...sessions].sort((a, b) => b.createdAt - a.createdAt);
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex items-center gap-1 px-3 pb-2 pt-1">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+          Chat history
+        </span>
+        <button
+          type="button"
+          onClick={onCreate}
+          className="ml-auto flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-sky-400 transition-colors hover:bg-zinc-800 hover:text-sky-300"
+        >
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          New chat
+        </button>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+        {sorted.length === 0 ? (
+          <p className="px-2.5 py-3 text-xs leading-relaxed text-zinc-500">
+            No saved chats yet — start a conversation and it will show up here.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-px">
+            {sorted.map((s) => {
+              const active = s.id === activeSessionId;
+              const tokens = sessionTokenCount(s);
+              return (
+                <div
+                  key={s.id}
+                  className={`group flex items-center gap-1.5 rounded-md ${
+                    active ? "bg-zinc-800" : "hover:bg-zinc-800/60"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => onSelect(s.id)}
+                    aria-current={active ? "true" : undefined}
+                    className="min-w-0 flex-1 rounded-md px-2.5 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={`truncate text-sm ${
+                          active ? "font-medium text-zinc-100" : "text-zinc-300"
+                        }`}
+                      >
+                        {s.title}
+                      </span>
+                      {s.summary && (
+                        <span className="shrink-0 rounded bg-violet-500/15 px-1 py-px text-[9px] font-medium uppercase tracking-wider text-violet-300">
+                          archive
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-zinc-500">
+                      {formatDate(s.createdAt)}
+                      {tokens > 0 ? ` · ${tokens.toLocaleString()} tok` : ""}
+                    </div>
+                  </button>
+                  <div className="flex shrink-0 gap-0.5 pr-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                    <button
+                      type="button"
+                      onClick={() => onRename(s.id)}
+                      aria-label={`Rename ${s.title}`}
+                      title="Rename"
+                      className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                        <path
+                          d="M9.5 3.5 12.5 6.5M3.5 12.5l.6-2.4 6.6-6.6 1.8 1.8-6.6 6.6-2.4.6Z"
+                          stroke="currentColor"
+                          strokeWidth="1.2"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDelete(s.id)}
+                      aria-label={`Delete ${s.title}`}
+                      title="Delete"
+                      className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-red-500/20 hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                        <path
+                          d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.6 9h6.8l.6-9M6.5 7v4M9.5 7v4"
+                          stroke="currentColor"
+                          strokeWidth="1.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

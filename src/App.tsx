@@ -17,6 +17,7 @@ import PersonalitySettings from "./components/settings/PersonalitySettings";
 import GuardrailSettings from "./components/settings/GuardrailSettings";
 import IntegrationsSettings from "./components/settings/IntegrationsSettings";
 import ChatView from "./components/chat/ChatView";
+import ChatHistoryPanel from "./components/chat/ChatHistoryPanel";
 import TerminalPanel from "./components/terminal/TerminalPanel";
 import ParametersDialog from "./components/parameters/ParametersDialog";
 import TokenCounter from "./components/parameters/TokenCounter";
@@ -1233,6 +1234,24 @@ export default function App() {
                 onImportJSONFile={handleImportBackupJSONFile}
               />
             )}
+            {sidebarTab === "history" && (
+              <ChatHistoryPanel
+                sessions={chat.sessions}
+                activeSessionId={chat.activeSessionId}
+                onSelect={chat.selectSession}
+                onCreate={() => chat.createSession()}
+                onRename={(id) => {
+                  const current = chat.sessions.find((s) => s.id === id);
+                  const name = window.prompt("Rename session", current?.title ?? "");
+                  if (name && name.trim()) chat.renameSession(id, name.trim());
+                }}
+                onDelete={(id) => {
+                  if (window.confirm("Delete this chat session? This cannot be undone.")) {
+                    chat.deleteSession(id);
+                  }
+                }}
+              />
+            )}
             {sidebarTab === "deploy" && (
               <DeployWizard
                 projectId={projects.activeProjectId}
@@ -1289,20 +1308,8 @@ export default function App() {
                 key={projects.activeProjectId}
                 projectName={projects.activeProject.name}
                 messages={chat.messages}
-                sessions={chat.sessions}
                 activeSessionId={chat.activeSessionId}
-                onSelectSession={chat.selectSession}
                 onCreateSession={() => chat.createSession()}
-                onRenameSession={(id) => {
-                  const current = chat.sessions.find((s) => s.id === id);
-                  const name = window.prompt("Rename session", current?.title ?? "");
-                  if (name && name.trim()) chat.renameSession(id, name.trim());
-                }}
-                onDeleteSession={(id) => {
-                  if (window.confirm("Delete this chat session? This cannot be undone.")) {
-                    chat.deleteSession(id);
-                  }
-                }}
                 onSend={handleChatSend}
                 onOpenParameters={() => setParametersOpen(true)}
                 streaming={chatStream.busy}
