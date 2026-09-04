@@ -20,7 +20,6 @@ import ChatView from "./components/chat/ChatView";
 import ChatHistoryPanel from "./components/chat/ChatHistoryPanel";
 import TerminalPanel from "./components/terminal/TerminalPanel";
 import ParametersDialog from "./components/parameters/ParametersDialog";
-import TokenCounter from "./components/parameters/TokenCounter";
 import { useOpenRouterCredits } from "./hooks/useOpenRouterCredits";
 import { providerConfig } from "./data/providers";
 import { GOD_MODE_TOOLS, GOD_MODE_NAMES, runGodModeTool } from "./data/godModeTools";
@@ -1354,7 +1353,6 @@ export default function App() {
             )}
             <footer className="flex h-10 shrink-0 items-center justify-between border-t border-zinc-800 px-4 text-xs text-zinc-500">
               <span>Cracker Box â€” your AI dev workspace</span>
-              <TokenCounter count={contextGuard.tokenCount} />
             </footer>
           </main>
           {!previewCollapsed && (
