@@ -280,6 +280,8 @@ export interface PendingApproval {
 export interface ChatStreamState {
   busy: boolean;
   error: string | null;
+  /** Set when a turn ends "successfully" but produced no text and no tool output. */
+  emptyTurn: boolean;
   dismissError: () => void;
   abort: () => void;
   stream: (text: string, attachments: ChatAttachment[]) => Promise<ChatStreamResult>;
@@ -531,6 +533,7 @@ function statusReason(status: number, model: string): string {
 export function useChatStream(options: ChatStreamOptions): ChatStreamState {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [emptyTurn, setEmptyTurn] = useState(false);
   const [approval, setApproval] = useState<PendingApproval | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const busyRef = useRef(false);
@@ -644,6 +647,7 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
       busyRef.current = true;
       setBusy(true);
       setError(null);
+      setEmptyTurn(false);
       approvalBatchRef.current = null;
 
       let assistantId = appendAssistant();
@@ -668,6 +672,7 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
       let accCompletion = 0;
 
       const finish = (result: ChatStreamResult): ChatStreamResult => {
+        setEmptyTurn(result.ok === true && receivedText === "" && toolIterations === 0);
         if (accPrompt > 0 || accCompletion > 0) {
           try {
             onUsage?.(accPrompt, accCompletion);
@@ -1019,34 +1024,57 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
               continue;
             }
             if (call.name === "write_file") {
-              const result = await withTimeout(
-                20_000,
-                () => writeWorkspaceFile(container, path, content),
-                "The file write hung — the workspace is busy."
-              );
-              const status = result.ok ? "done" : "error";
-              const resultText = result.ok
-                ? `Wrote file (${result.size} bytes).`
-                : `Error: ${result.error}. Try again with a valid path.`;
-              patchAssistantToolCall(assistantId, call.id, { status, result: resultText });
-              if (result.ok) {
-                persistFile(path, content);
-                void refreshTree();
+              // The project store is authoritative — write it first so the
+              // change is durable even if the WebContainer sandbox is slow or
+              // wedged (common on phones). The container mirror is best-effort,
+              // only so the live preview can see it.
+              persistFile(path, content);
+              const container = await whenReady(READY_TIMEOUT_MS);
+              let mirrorOk = "skipped";
+              if (container) {
+                try {
+                  const result = await withTimeout(
+                    8_000,
+                    () => writeWorkspaceFile(container, path, content),
+                    "the workspace mirror timed out — store write already saved."
+                  );
+                  mirrorOk = result.ok ? "ok" : "error";
+                  if (result.ok) void refreshTree();
+                } catch {
+                  mirrorOk = "error";
+                }
               }
+              const resultText =
+                mirrorOk === "ok"
+                  ? `Wrote file (${new TextEncoder().encode(content).length} bytes).`
+                  : mirrorOk === "error"
+                    ? "Wrote file to your project. Live preview mirror skipped — it may update on restart."
+                    : "Wrote file to your project (no live workspace mirror available).";
+              patchAssistantToolCall(assistantId, call.id, { status: "done", result: resultText });
               pushToolResult(call.id, resultText);
             } else {
-              const result = await withTimeout(
-                20_000,
-                () => deleteWorkspaceFile(container, path),
-                "The file delete hung — the workspace is busy."
-              );
-              const status = result.ok ? "done" : "error";
-              const resultText = result.ok ? "Deleted file." : `Error: ${result.error}.`;
-              patchAssistantToolCall(assistantId, call.id, { status, result: resultText });
-              if (result.ok) {
-                removeFile(path);
-                void refreshTree();
+              // Same principle for deletes: update the durable store first.
+              removeFile(path);
+              const container = await whenReady(READY_TIMEOUT_MS);
+              let mirrorOk = "skipped";
+              if (container) {
+                try {
+                  const result = await withTimeout(
+                    8_000,
+                    () => deleteWorkspaceFile(container, path),
+                    "the workspace mirror timed out — store delete already applied."
+                  );
+                  mirrorOk = result.ok ? "ok" : "error";
+                  if (result.ok) void refreshTree();
+                } catch {
+                  mirrorOk = "error";
+                }
               }
+              const resultText =
+                mirrorOk === "ok"
+                  ? "Deleted file."
+                  : "Deleted file from your project. Live preview mirror skipped — it may update on restart.";
+              patchAssistantToolCall(assistantId, call.id, { status: "done", result: resultText });
               pushToolResult(call.id, resultText);
             }
             continue;
@@ -1164,5 +1192,5 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
     []
   );
 
-  return { busy, error, dismissError, abort, stream, approval, resolveApproval, resolveApprovalWithReply };
+  return { busy, error, emptyTurn, dismissError, abort, stream, approval, resolveApproval, resolveApprovalWithReply };
 }
