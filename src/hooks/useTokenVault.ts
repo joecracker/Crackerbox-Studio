@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { usePersistentState } from "./usePersistentState";
 import { decryptToken, deriveVaultLookupKey, encryptToken } from "../utils/crypto";
 import type { EncryptedPayload } from "../utils/crypto";
@@ -68,8 +68,6 @@ export interface TokenVault {
 
 export function useTokenVault(): TokenVault {
   const [vault, setVault] = usePersistentState<VaultState>(VAULT_KEY, EMPTY_VAULT);
-  const vaultRef = useRef<VaultState>(vault);
-  vaultRef.current = vault;
   const [trusted, setTrusted] = usePersistentState<TokenMap>(TRUSTED_KEY, {});
   const [passphrase, setPassphrase] = useState<string | null>(() =>
     hasAnyToken(trusted) ? TRUSTED_SENTINEL : null
@@ -187,7 +185,9 @@ export function useTokenVault(): TokenVault {
   // Cloud vault: push the ENCRYPTED vault state to Cloudflare KV, keyed by a
   // passphrase-derived hash. The server only ever stores ciphertext, so the
   // vault survives cache clears and can be pulled back on any device with the
-  // same passphrase.
+  // same passphrase. We always re-encrypt from the currently-unlocked tokens so
+  // devices with "Trust this device" (which keep tokens in plaintext locally)
+  // still upload a proper encrypted vault.
   const syncToCloud = async (): Promise<boolean> => {
     setError(null);
     setCloudStatus(null);
@@ -198,10 +198,15 @@ export function useTokenVault(): TokenVault {
     setBusy(true);
     try {
       const key = await deriveVaultLookupKey(passphrase);
+      const sealed: VaultState = { ...EMPTY_VAULT };
+      for (const service of SERVICES) {
+        const plain = tokens[service];
+        if (plain) sealed[service] = await encryptToken(passphrase, plain);
+      }
       const res = await fetch(`${VAULT_API}?key=${encodeURIComponent(key)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(vaultRef.current),
+        body: JSON.stringify(sealed),
       });
       const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
       if (!res.ok || !data?.ok) {
@@ -244,9 +249,11 @@ export function useTokenVault(): TokenVault {
       // passphrase and merge into the local vault + unlocked tokens.
       const result: TokenMap = {};
       const restored = data.vault;
+      let hadPayloads = false;
       for (const service of SERVICES) {
         const payload = restored[service];
         if (payload) {
+          hadPayloads = true;
           try {
             result[service] = await decryptToken(passphrase, payload);
           } catch {
@@ -260,7 +267,9 @@ export function useTokenVault(): TokenVault {
       setCloudStatus(
         count > 0
           ? `Restored ${count} token(s) from the cloud.`
-          : "Cloud vault restored, but no tokens could be decrypted with this passphrase."
+          : hadPayloads
+            ? "Cloud vault found, but no tokens could be decrypted with this passphrase — double-check you typed it exactly."
+            : "No tokens are stored in the cloud yet. Sync once from a device that has tokens."
       );
       return count > 0;
     } catch (e) {
