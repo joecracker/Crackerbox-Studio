@@ -81,14 +81,14 @@ export default function ChatView({
         </div>
       )}
       {streamError && (
-        <div className="mx-4 mb-2 flex items-start gap-2 rounded-md border border-red-900/60 bg-red-950/40 px-3 py-2">
+        <div className="mx-4 mb-2 flex items-start gap-2 rounded-md border border-amber-900/40 bg-amber-950/30 px-3 py-2">
           <svg
             width="13"
             height="13"
             viewBox="0 0 16 16"
             fill="none"
             aria-hidden="true"
-            className="mt-0.5 shrink-0 text-red-400"
+            className="mt-0.5 shrink-0 text-amber-400"
           >
             <path
               d="M8 1.8 15 13.8H1L8 1.8Z"
@@ -98,14 +98,14 @@ export default function ChatView({
             />
             <path d="M8 6v3M8 11.2v.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
           </svg>
-          <p className="min-w-0 flex-1 text-[11px] leading-relaxed text-red-300">
+          <p className="min-w-0 flex-1 text-[11px] leading-relaxed text-amber-200/90">
             {streamError}
           </p>
           <button
             type="button"
             onClick={onDismissStreamError}
             aria-label="Dismiss error"
-            className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-700 hover:text-zinc-100"
+            className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-amber-400/60 transition-colors hover:bg-zinc-700/60 hover:text-amber-200"
           >
             <svg width="9" height="9" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />

@@ -469,8 +469,25 @@ function looksToolRelated(reason: string): boolean {
   return /tool|tools|function|unsupported parameter|unknown parameter/i.test(reason);
 }
 
-const NETWORK_RETRY_DELAY = 1500;
-const NETWORK_RETRY_MAX = 3;
+const NETWORK_RETRY_INITIAL_DELAY = 1000;
+const NETWORK_RETRY_MAX_DURATION = 20_000;
+
+const NETWORK_RETRY_MESSAGE =
+  "Connection lost while switching networks — say 'retry' to pick up where we left off.";
+
+// Exponential backoff delays (1s, 2s, 4s, 8s, ...) that sum to at most
+// NETWORK_RETRY_MAX_DURATION. Brief handoffs (Wi-Fi -> cellular) ride through.
+const NETWORK_RETRY_DELAYS: number[] = (() => {
+  const delays: number[] = [];
+  let delay = NETWORK_RETRY_INITIAL_DELAY;
+  let total = 0;
+  while (total + delay <= NETWORK_RETRY_MAX_DURATION) {
+    delays.push(delay);
+    total += delay;
+    delay *= 2;
+  }
+  return delays;
+})();
 
 function isNetworkError(err: unknown): boolean {
   if (err instanceof TypeError) return true;
@@ -655,6 +672,13 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
         return finish({ ok: false, error: message });
       };
 
+      // Network failure: keep any partial text and never delete the assistant
+      // message — only surface a gentle, dismissible notice.
+      const gentleFail = (message: string): ChatStreamResult => {
+        setError(message);
+        return finish({ ok: false, error: message });
+      };
+
       const requestApproval = (pending: PendingApproval): Promise<boolean> => {
         const batch = approvalBatchRef.current;
         if (batch) {
@@ -781,11 +805,14 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
               if (receivedText === "") removeAssistant(assistantId);
               return finish({ ok: false, error: null });
             }
-            const safeToRetry =
-              isNetworkError(e) && turnText === "" && drafts.size === 0 && attempt < NETWORK_RETRY_MAX;
-            if (safeToRetry) {
-              await new Promise((r) => setTimeout(r, NETWORK_RETRY_DELAY * (attempt + 1)));
+            const isNetwork = isNetworkError(e);
+            if (isNetwork && attempt < NETWORK_RETRY_DELAYS.length) {
+              // Silent retry with backoff — brief handoffs recover invisibly.
+              await new Promise((r) => setTimeout(r, NETWORK_RETRY_DELAYS[attempt]));
               continue;
+            }
+            if (isNetwork) {
+              return gentleFail(NETWORK_RETRY_MESSAGE);
             }
             const message =
               e instanceof Error && e.message && e.message !== "Failed to fetch"
@@ -862,13 +889,15 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
             if (receivedText === "") removeAssistant(assistantId);
             return finish({ ok: false, error: null });
           }
+          // A network drop mid-stream must NOT delete what was already generated.
+          // We can't resume an SSE stream, but we preserve the partial message so
+          // the user can nudge the model to continue rather than starting over.
+          if (isNetworkError(e) || (typeof navigator !== "undefined" && navigator.onLine === false)) {
+            return gentleFail(NETWORK_RETRY_MESSAGE);
+          }
           const message =
-            isNetworkError(e) || navigator.onLine === false
-              ? "Connection lost while streaming — check your network and send again to retry."
-              : `Streaming failed: ${
-                  e instanceof Error && e.message ? e.message : "unknown error"
-                }`;
-          return fail(message);
+            e instanceof Error && e.message ? e.message : "unknown error";
+          return fail(`Streaming failed: ${message}`);
         }
 
         const callDrafts = [...drafts.values()].sort((a, b) => a.index - b.index);
