@@ -76,8 +76,8 @@ export default function ProjectLibrary({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-1 px-3 pb-2 pt-1">
-        <span className="flex-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+      <div className="flex flex-wrap items-center gap-1 px-3 pb-2 pt-1">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
           Projects
         </span>
         <div className="relative">

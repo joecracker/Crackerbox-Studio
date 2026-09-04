@@ -33,7 +33,7 @@ export interface LayoutState {
 }
 
 const DEFAULT_LAYOUT: LayoutState = {
-  sidebarWidth: 320,
+    sidebarWidth: 360,
   sidebarCollapsed: true,
   previewWidth: Math.round(window.innerWidth * PREVIEW_DEFAULT_RATIO),
   previewCollapsed: true,
