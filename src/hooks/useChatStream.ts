@@ -335,7 +335,7 @@ function messageToPayloadMessages(message: ChatMessage): PayloadMessage[] {
   const toolCalls: ToolCallPayload[] = calls.map((c) => ({
     id: c.id,
     type: "function",
-    function: { name: c.name, arguments: c.arguments },
+    function: { name: c.name, arguments: ensureJsonObjectString(c.arguments) },
   }));
   const tools: PayloadToolMessage[] = calls
     .filter((c) => c.result != null)
@@ -388,10 +388,41 @@ function extractDelta(json: unknown): { content?: string; toolCalls?: ToolCallDe
       if (typeof t.id === "string") frag.id = t.id;
       if (typeof fn.name === "string") frag.name = fn.name;
       if (typeof fn.arguments === "string") frag.arguments = fn.arguments;
+      else if (fn.arguments != null && typeof fn.arguments === "object") {
+        try {
+          frag.arguments = JSON.stringify(fn.arguments);
+        } catch {
+          // ignore stringify failure
+        }
+      }
       return frag;
     });
   }
   return out;
+}
+
+function ensureJsonObjectString(raw: unknown): string {
+  if (raw == null) return "{}";
+  if (typeof raw === "object") {
+    try {
+      return JSON.stringify(raw);
+    } catch {
+      return "{}";
+    }
+  }
+  if (typeof raw !== "string") return "{}";
+  const t = raw.trim();
+  if (!t) return "{}";
+  try {
+    const parsed = JSON.parse(t);
+    if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return JSON.stringify(parsed);
+    }
+    if (parsed !== null && typeof parsed === "object") return JSON.stringify(parsed);
+    return "{}";
+  } catch {
+    return "{}";
+  }
 }
 
 interface ToolCallDraft {
@@ -832,7 +863,7 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
         const calls: ChatToolCall[] = callDrafts.map((d) => ({
           id: d.id ?? createToolCallId(),
           name: d.name ?? "unknown",
-          arguments: d.arguments,
+          arguments: ensureJsonObjectString(d.arguments),
           status: "running",
         }));
         setAssistantToolCalls(assistantId, calls);
@@ -843,7 +874,7 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
           tool_calls: calls.map((c) => ({
             id: c.id,
             type: "function",
-            function: { name: c.name, arguments: c.arguments },
+            function: { name: c.name, arguments: ensureJsonObjectString(c.arguments) },
           })),
         });
 
