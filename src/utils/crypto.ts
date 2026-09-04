@@ -87,3 +87,28 @@ export async function decryptToken(
     throw new Error("Incorrect passphrase");
   }
 }
+
+// A deterministic lookup key for the cloud vault: derived from the passphrase so
+// the same passphrase always finds the same vault, but never sent in plaintext.
+// Uses PBKDF2 with a fixed salt and the same iteration count as encryption, so
+// brute-forcing the key is just as expensive as brute-forcing the ciphertext.
+const VAULT_LOOKUP_SALT = "crackerbox-vault-lookup-v1";
+
+export async function deriveVaultLookupKey(passphrase: string): Promise<string> {
+  const subtle = requireSubtle();
+  const material = await subtle.importKey(
+    "raw",
+    new TextEncoder().encode(passphrase),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  const bits = await subtle.deriveBits(
+    { name: "PBKDF2", hash: "SHA-256", salt: new TextEncoder().encode(VAULT_LOOKUP_SALT), iterations: DEFAULT_ITERATIONS },
+    material,
+    256
+  );
+  return Array.from(new Uint8Array(bits))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}

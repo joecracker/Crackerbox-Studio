@@ -390,6 +390,30 @@ export default function DeployWizard({
                   <p className="w-full break-words text-[11px] text-sky-400/90">{transferStatus}</p>
                 )}
               </div>
+              <div className="flex flex-wrap items-center gap-2 border-t border-zinc-800/60 pt-3">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                  Cloud vault (survives clearing your cache)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void vault.syncToCloud()}
+                  disabled={vault.busy}
+                  className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:border-emerald-600 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Sync to cloud
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void vault.restoreFromCloud()}
+                  disabled={vault.busy}
+                  className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:border-emerald-600 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Restore from cloud
+                </button>
+                {vault.cloudStatus && (
+                  <p className="w-full break-words text-[11px] text-emerald-400/90">{vault.cloudStatus}</p>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => setStep("configure")}

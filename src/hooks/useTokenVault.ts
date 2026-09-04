@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { usePersistentState } from "./usePersistentState";
-import { decryptToken, encryptToken } from "../utils/crypto";
+import { decryptToken, deriveVaultLookupKey, encryptToken } from "../utils/crypto";
 import type { EncryptedPayload } from "../utils/crypto";
 
 export type TokenService =
@@ -26,6 +26,7 @@ type TokenMap = Partial<Record<TokenService, string>>;
 
 const VAULT_KEY = "crackerbox.deploy.vault";
 const TRUSTED_KEY = "crackerbox.vault.trusted";
+const VAULT_API = "/api/vault";
 const EMPTY_VAULT: VaultState = {
   github: null,
   netlify: null,
@@ -36,6 +37,16 @@ const EMPTY_VAULT: VaultState = {
   homeassistant: null,
 };
 const TRUSTED_SENTINEL = "trusted";
+
+const SERVICES: TokenService[] = [
+  "github",
+  "netlify",
+  "openrouter",
+  "opencode",
+  "tavily",
+  "cloudflare",
+  "homeassistant",
+];
 
 function hasAnyToken(map: TokenMap): boolean {
   return Object.keys(map).length > 0;
@@ -52,12 +63,17 @@ export interface TokenVault {
   clearToken: (service: TokenService) => void;
   exportTokens: () => string;
   importTokens: (json: string) => Promise<{ imported: TokenService[]; skipped: string[] }>;
+  syncToCloud: () => Promise<boolean>;
+  restoreFromCloud: () => Promise<boolean>;
+  cloudStatus: string | null;
   busy: boolean;
   error: string | null;
 }
 
 export function useTokenVault(): TokenVault {
   const [vault, setVault] = usePersistentState<VaultState>(VAULT_KEY, EMPTY_VAULT);
+  const vaultRef = useRef<VaultState>(vault);
+  vaultRef.current = vault;
   const [trusted, setTrusted] = usePersistentState<TokenMap>(TRUSTED_KEY, {});
   const [passphrase, setPassphrase] = useState<string | null>(() =>
     hasAnyToken(trusted) ? TRUSTED_SENTINEL : null
@@ -66,6 +82,7 @@ export function useTokenVault(): TokenVault {
   const [tokens, setTokens] = useState<TokenMap>(trusted);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cloudStatus, setCloudStatus] = useState<string | null>(null);
 
   const hasStored = (service: TokenService) =>
     vault[service] !== null || trusted[service] !== undefined;
@@ -173,6 +190,93 @@ export function useTokenVault(): TokenVault {
     return { imported, skipped };
   };
 
+  // Cloud vault: push the ENCRYPTED vault state to Cloudflare KV, keyed by a
+  // passphrase-derived hash. The server only ever stores ciphertext, so the
+  // vault survives cache clears and can be pulled back on any device with the
+  // same passphrase.
+  const syncToCloud = async (): Promise<boolean> => {
+    setError(null);
+    setCloudStatus(null);
+    if (!passphrase) {
+      setError("Unlock the vault first to sync to the cloud.");
+      return false;
+    }
+    setBusy(true);
+    try {
+      const key = await deriveVaultLookupKey(passphrase);
+      const res = await fetch(`${VAULT_API}?key=${encodeURIComponent(key)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(vaultRef.current),
+      });
+      const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || `Cloud sync failed (HTTP ${res.status}).`);
+      }
+      setCloudStatus("Vault synced to the cloud. It will survive clearing your cache.");
+      return true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Cloud sync failed.");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const restoreFromCloud = async (): Promise<boolean> => {
+    setError(null);
+    setCloudStatus(null);
+    if (!passphrase) {
+      setError("Unlock the vault first to restore from the cloud.");
+      return false;
+    }
+    setBusy(true);
+    try {
+      const key = await deriveVaultLookupKey(passphrase);
+      const res = await fetch(`${VAULT_API}?key=${encodeURIComponent(key)}`);
+      const data = (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        error?: string;
+        vault?: VaultState | null;
+      } | null;
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || `Cloud restore failed (HTTP ${res.status}).`);
+      }
+      if (!data.vault) {
+        setCloudStatus("No cloud vault found for this passphrase. Sync once from a device that has tokens.");
+        return false;
+      }
+      // Re-encrypt the restored ciphertext with this device's (identical)
+      // passphrase and merge into the local vault + unlocked tokens.
+      const result: TokenMap = {};
+      const restored = data.vault;
+      for (const service of SERVICES) {
+        const payload = restored[service];
+        if (payload) {
+          try {
+            result[service] = await decryptToken(passphrase, payload);
+          } catch {
+            // token sealed with a different passphrase — skip
+          }
+        }
+      }
+      setVault(restored);
+      setTokens(result);
+      const count = Object.keys(result).length;
+      setCloudStatus(
+        count > 0
+          ? `Restored ${count} token(s) from the cloud.`
+          : "Cloud vault restored, but no tokens could be decrypted with this passphrase."
+      );
+      return count > 0;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Cloud restore failed.");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return {
     unlocked: passphrase !== null,
     trusted: passphrase === TRUSTED_SENTINEL,
@@ -184,6 +288,9 @@ export function useTokenVault(): TokenVault {
     clearToken,
     exportTokens,
     importTokens,
+    syncToCloud,
+    restoreFromCloud,
+    cloudStatus,
     busy,
     error,
   };
