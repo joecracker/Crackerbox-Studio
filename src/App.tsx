@@ -218,6 +218,17 @@ export default function App() {
     };
   }, [mutationTick, projects.hydrated, snapshots]);
 
+  // Auto-connect to Home Assistant MCP on startup when the URL is saved and an
+  // HA token is in the vault. Falls back to a quiet failure (no error spam) if
+  // the connection can't be established right away.
+  useEffect(() => {
+    if (!vault.unlocked) return;
+    if (!mcp.url.trim()) return;
+    if (!vault.tokens.homeassistant) return;
+    if (mcp.connected || mcp.connecting) return;
+    void mcp.connect();
+  }, [vault.unlocked, vault.tokens.homeassistant, mcp.url, mcp.connected, mcp.connecting, mcp]);
+
   const persistFile = useMemo(
     () => (path: string, content: string) => {
       projects.updateActiveFiles((prev) => updateFileContent(prev, path, content));
