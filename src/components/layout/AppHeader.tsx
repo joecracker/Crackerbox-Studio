@@ -1,4 +1,5 @@
 import type { Ref } from "react";
+import UpdateButton from "./UpdateButton";
 
 interface AppHeaderProps {
   sidebarCollapsed: boolean;
@@ -91,6 +92,7 @@ export default function AppHeader({
         </span>
       </div>
       <div className="ml-auto flex items-center gap-1">
+        <UpdateButton />
         <button
           type="button"
           onClick={onToggleTerminal}
