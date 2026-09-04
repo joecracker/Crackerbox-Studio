@@ -20,7 +20,6 @@ export default function SessionCredits({
   tokenCount,
   contextLength,
   contextPercent,
-  contextLevel,
   credits,
   creditsLoading,
   creditsError,
@@ -29,29 +28,15 @@ export default function SessionCredits({
   const pct =
     contextPercent !== null && contextPercent >= 0 ? Math.round(contextPercent * 100) : null;
 
-  const contextColor =
-    contextLevel === "hard"
-      ? "text-red-400"
-      : contextLevel === "soft"
-        ? "text-amber-400"
-        : "text-emerald-400";
-
-  const contextDot =
-    contextLevel === "hard"
-      ? "bg-red-400"
-      : contextLevel === "soft"
-        ? "bg-amber-400"
-        : "bg-emerald-400";
-
   return (
     <div className="flex flex-col gap-1 border-t border-zinc-800 px-3 py-2 text-[11px] leading-tight">
-      {/* Context */}
+      {/* Context — informational only, never blocks or warns */}
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-1.5 text-zinc-500">
-          <span className={`h-1.5 w-1.5 rounded-full ${contextDot}`} />
+          <span className="h-1.5 w-1.5 rounded-full bg-zinc-600" />
           Context
         </span>
-        <span className={`font-medium tabular-nums ${contextColor}`}>
+        <span className="font-medium tabular-nums text-zinc-400">
           {pct !== null ? `${pct}%` : "—"}
         </span>
       </div>

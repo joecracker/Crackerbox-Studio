@@ -951,7 +951,11 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
           const content = typeof args.content === "string" ? args.content : "";
 
           if (call.name === "write_file" || call.name === "delete_file") {
-            const oldContent = await readPathContent(path);
+            const oldContent = await withTimeout(
+              15_000,
+              () => readPathContent(path),
+              "Reading the file timed out."
+            ).catch(() => "");
             const autoApproved =
               guardrailMode === "auto" ||
               (call.name === "write_file" &&
@@ -1003,7 +1007,11 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
               continue;
             }
             if (call.name === "write_file") {
-              const result = await writeWorkspaceFile(container, path, content);
+              const result = await withTimeout(
+                20_000,
+                () => writeWorkspaceFile(container, path, content),
+                "The file write hung — the workspace is busy."
+              );
               const status = result.ok ? "done" : "error";
               const resultText = result.ok
                 ? `Wrote file (${result.size} bytes).`
@@ -1015,7 +1023,11 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
               }
               pushToolResult(call.id, resultText);
             } else {
-              const result = await deleteWorkspaceFile(container, path);
+              const result = await withTimeout(
+                20_000,
+                () => deleteWorkspaceFile(container, path),
+                "The file delete hung — the workspace is busy."
+              );
               const status = result.ok ? "done" : "error";
               const resultText = result.ok ? "Deleted file." : `Error: ${result.error}.`;
               patchAssistantToolCall(assistantId, call.id, { status, result: resultText });
