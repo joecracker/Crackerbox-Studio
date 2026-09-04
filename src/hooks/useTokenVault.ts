@@ -218,7 +218,24 @@ export function useTokenVault(): TokenVault {
     setBusy(true);
     try {
       const key = await deriveVaultLookupKey(phrase);
+      // Merge: start from whatever is already in the cloud so a device with no
+      // tokens unlocked can NEVER wipe the shared vault. A clean cache + fresh
+      // unlock + "Sync" used to overwrite the whole vault with nulls.
       const sealed: VaultState = { ...EMPTY_VAULT };
+      try {
+        const existing = await fetch(`${VAULT_API}?key=${encodeURIComponent(key)}`);
+        const existingData = (await existing.json().catch(() => null)) as {
+          vault?: VaultState | null;
+        } | null;
+        const remote = existingData?.vault;
+        if (remote) {
+          for (const service of SERVICES) {
+            if (remote[service]) sealed[service] = remote[service];
+          }
+        }
+      } catch {
+        // best effort — if the remote read fails, fall through to local-only
+      }
       for (const service of SERVICES) {
         const plain = tokens[service];
         if (plain) sealed[service] = await encryptToken(phrase, plain);
@@ -284,15 +301,19 @@ export function useTokenVault(): TokenVault {
           }
         }
       }
+      if (!hadPayloads) {
+        // Cloud vault exists but is empty — do NOT wipe this device's in-memory
+        // tokens, and don't overwrite the persisted encrypted vault.
+        setCloudStatus("The cloud vault is empty — no tokens synced to it yet. Sync from a device that has your tokens.");
+        return false;
+      }
       setVault(restored);
       setTokens(result);
       const count = Object.keys(result).length;
       setCloudStatus(
         count > 0
           ? `Restored ${count} token(s) from the cloud.`
-          : hadPayloads
-            ? "Cloud vault found, but no tokens could be decrypted with this passphrase — double-check you typed it."
-            : "No tokens are stored in the cloud yet. Sync once from a device that has tokens."
+          : "Cloud vault found, but no tokens could be decrypted with this passphrase — double-check you typed it exactly."
       );
       return count > 0;
     } catch (e) {
