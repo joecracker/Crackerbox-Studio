@@ -303,7 +303,7 @@ export default function App() {
 
   const buildSystemPrompt = useCallback((): string => {
     const parts: string[] = [personality.composePrompt(parameters.systemPrompt)];
-    const brief = projects.activeProject.context.trim();
+    const brief = (projects.activeProject.context ?? "").trim();
     if (brief) {
       parts.push(`## Project brief\n${brief}\n\nThe brief above is fixed project context, not conversation history. Treat it as always-true background for this project.`);
     }

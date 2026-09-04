@@ -155,6 +155,7 @@ export function useProjects() {
       meta.projects.map((m) => ({
         ...m,
         hosted: m.hosted !== false,
+        context: typeof m.context === "string" ? m.context : "",
         files: filesMap[m.id] ?? (m.id === "demo" ? demoFiles : []),
       })),
     [meta.projects, filesMap]
