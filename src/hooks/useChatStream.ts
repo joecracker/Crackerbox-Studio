@@ -420,6 +420,15 @@ function looksToolRelated(reason: string): boolean {
   return /tool|tools|function|unsupported parameter|unknown parameter/i.test(reason);
 }
 
+const NETWORK_RETRY_DELAY = 1500;
+const NETWORK_RETRY_MAX = 3;
+
+function isNetworkError(err: unknown): boolean {
+  if (err instanceof TypeError) return true;
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
+  return false;
+}
+
 function statusReason(status: number, model: string): string {
   switch (status) {
     case 401:
@@ -691,36 +700,48 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
         };
 
         let res: Response;
-        try {
-          res = await fetch(chatUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${getApiKey()}`,
-            },
-            body: JSON.stringify({
-              model,
-              messages: workingPayload,
-              stream: true,
-              temperature,
-              max_tokens: maxTokens,
-              stream_options: { include_usage: true },
-              ...(toolsEnabled
-                ? {
-                    tools: [...toolsFor(webContainer, webContainerAvailable), ...(extraTools ?? [])],
-                    tool_choice: "auto" as const,
-                  }
-                : {}),
-            }),
-            signal: controller.signal,
-          });
-        } catch (e) {
-          if (controller.signal.aborted) {
-            if (receivedText === "") removeAssistant(assistantId);
-            return finish({ ok: false, error: null });
+        for (let attempt = 0; ; attempt++) {
+          try {
+            res = await fetch(chatUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${getApiKey()}`,
+              },
+              body: JSON.stringify({
+                model,
+                messages: workingPayload,
+                stream: true,
+                temperature,
+                max_tokens: maxTokens,
+                stream_options: { include_usage: true },
+                ...(toolsEnabled
+                  ? {
+                      tools: [...toolsFor(webContainer, webContainerAvailable), ...(extraTools ?? [])],
+                      tool_choice: "auto" as const,
+                    }
+                  : {}),
+              }),
+              signal: controller.signal,
+            });
+            break;
+          } catch (e) {
+            if (controller.signal.aborted) {
+              if (receivedText === "") removeAssistant(assistantId);
+              return finish({ ok: false, error: null });
+            }
+            const safeToRetry =
+              isNetworkError(e) && turnText === "" && drafts.size === 0 && attempt < NETWORK_RETRY_MAX;
+            if (safeToRetry) {
+              await new Promise((r) => setTimeout(r, NETWORK_RETRY_DELAY * (attempt + 1)));
+              continue;
+            }
+            const message =
+              e instanceof Error && e.message && e.message !== "Failed to fetch"
+                ? e.message
+                : "Network error — check your connection and try again.";
+            return fail(`Request failed: ${message}`);
           }
-          const message = e instanceof Error && e.message ? e.message : "Network error";
-          return fail(`Request failed: ${message}`);
         }
 
         if (!res.ok) {
@@ -790,7 +811,12 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
             if (receivedText === "") removeAssistant(assistantId);
             return finish({ ok: false, error: null });
           }
-          const message = e instanceof Error && e.message ? e.message : "Streaming failed";
+          const message =
+            isNetworkError(e) || navigator.onLine === false
+              ? "Connection lost while streaming — check your network and send again to retry."
+              : `Streaming failed: ${
+                  e instanceof Error && e.message ? e.message : "unknown error"
+                }`;
           return fail(message);
         }
 
