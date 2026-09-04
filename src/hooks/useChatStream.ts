@@ -281,6 +281,7 @@ export interface ChatStreamState {
   busy: boolean;
   error: string | null;
   dismissError: () => void;
+  abort: () => void;
   stream: (text: string, attachments: ChatAttachment[]) => Promise<ChatStreamResult>;
   approval: PendingApproval | null;
   resolveApproval: (callId: string, approved: boolean) => void;
@@ -465,6 +466,10 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
   }, [options.activeProjectId]);
 
   const dismissError = useCallback(() => setError(null), []);
+
+  const abort = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
 
   const resolveApproval = useCallback((callId: string, approved: boolean) => {
     setApproval((current) => {
@@ -824,10 +829,11 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
           if (call.name === "write_file" || call.name === "delete_file") {
             const oldContent = await readPathContent(path);
             const autoApproved =
-              call.name === "write_file" &&
-              guardrailMode === "tiered" &&
-              (isExplicitlyRequested(path, text, fileIndex) ||
-                isTinySafeEdit(path, oldContent, content));
+              guardrailMode === "auto" ||
+              (call.name === "write_file" &&
+                guardrailMode === "tiered" &&
+                (isExplicitlyRequested(path, text, fileIndex) ||
+                  isTinySafeEdit(path, oldContent, content)));
             patchAssistantToolCall(assistantId, call.id, {
               status: autoApproved ? "running" : "approval",
               result: undefined,
@@ -915,20 +921,23 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
               pushToolResult(call.id, blockedText);
               continue;
             }
+            const autoApprovedCmd = guardrailMode === "auto";
             patchAssistantToolCall(assistantId, call.id, {
-              status: "approval",
+              status: autoApprovedCmd ? "running" : "approval",
               result: undefined,
             });
-            const approved = await requestApproval({
-              callId: call.id,
-              name: call.name,
-              path: "",
-              content: "",
-              oldContent: "",
-              newContent: "",
-              rationale: turnText || description || commandText,
-              command: commandText,
-            });
+            const approved =
+              autoApprovedCmd ||
+              (await requestApproval({
+                callId: call.id,
+                name: call.name,
+                path: "",
+                content: "",
+                oldContent: "",
+                newContent: "",
+                rationale: turnText || description || commandText,
+                command: commandText,
+              }));
             if (!approved) {
               const rejection = "User rejected this action. Please adjust your approach and propose an alternative.";
               patchAssistantToolCall(assistantId, call.id, { status: "rejected", result: rejection });
@@ -999,5 +1008,5 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
     []
   );
 
-  return { busy, error, dismissError, stream, approval, resolveApproval, resolveApprovalWithReply };
+  return { busy, error, dismissError, abort, stream, approval, resolveApproval, resolveApprovalWithReply };
 }

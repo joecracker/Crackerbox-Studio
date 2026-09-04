@@ -7,6 +7,7 @@ export type TokenService =
   | "github"
   | "openrouter"
   | "opencode"
+  | "google"
   | "tavily"
   | "cloudflare"
   | "homeassistant";
@@ -15,6 +16,7 @@ interface VaultState {
   github: EncryptedPayload | null;
   openrouter: EncryptedPayload | null;
   opencode: EncryptedPayload | null;
+  google: EncryptedPayload | null;
   tavily: EncryptedPayload | null;
   cloudflare: EncryptedPayload | null;
   homeassistant: EncryptedPayload | null;
@@ -29,6 +31,7 @@ const EMPTY_VAULT: VaultState = {
   github: null,
   openrouter: null,
   opencode: null,
+  google: null,
   tavily: null,
   cloudflare: null,
   homeassistant: null,
@@ -39,6 +42,7 @@ const SERVICES: TokenService[] = [
   "github",
   "openrouter",
   "opencode",
+  "google",
   "tavily",
   "cloudflare",
   "homeassistant",
@@ -91,6 +95,7 @@ export function useTokenVault(): TokenVault {
       if (vault.github) result.github = await decryptToken(phrase, vault.github);
       if (vault.openrouter) result.openrouter = await decryptToken(phrase, vault.openrouter);
       if (vault.opencode) result.opencode = await decryptToken(phrase, vault.opencode);
+      if (vault.google) result.google = await decryptToken(phrase, vault.google);
       if (vault.tavily) result.tavily = await decryptToken(phrase, vault.tavily);
       if (vault.cloudflare) result.cloudflare = await decryptToken(phrase, vault.cloudflare);
       if (vault.homeassistant) result.homeassistant = await decryptToken(phrase, vault.homeassistant);
@@ -169,6 +174,7 @@ export function useTokenVault(): TokenVault {
       "github",
       "openrouter",
       "opencode",
+      "google",
       "tavily",
       "cloudflare",
       "homeassistant",

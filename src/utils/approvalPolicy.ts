@@ -2,7 +2,7 @@ import type { DemoFile } from "../data/demoFiles";
 import { flattenFiles } from "../data/demoFiles";
 import { diffLines, diffStat } from "./diff";
 
-export type GuardrailMode = "tiered" | "all";
+export type GuardrailMode = "tiered" | "all" | "auto";
 
 const TINY_EDIT_MAX_CHANGED_LINES = 4;
 

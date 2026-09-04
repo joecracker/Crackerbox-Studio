@@ -7,6 +7,12 @@ interface GuardrailSettingsProps {
 
 const MODES: Array<{ id: GuardrailMode; label: string; description: string }> = [
   {
+    id: "auto",
+    label: "Auto (no approvals)",
+    description:
+      "Fly loose. File writes, deletes, commands, and package installs all run immediately with no approval prompts. Only the always-blocked dangerous commands (rm -rf /, sudo, mkfs, fork bombs, etc.) are refused. Use this if you trust the AI and want maximum speed.",
+  },
+  {
     id: "tiered",
     label: "Tiered guardrails",
     description:

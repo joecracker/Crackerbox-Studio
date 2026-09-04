@@ -25,6 +25,15 @@ export interface OpenRouterModel {
   };
 }
 
+export interface GoogleModel {
+  name: string;
+  displayName?: string;
+  description?: string;
+  inputTokenLimit?: number;
+  outputTokenLimit?: number;
+  supportedGenerationMethods?: string[];
+}
+
 function toNumber(value: string | undefined): number {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
@@ -53,6 +62,21 @@ export function normalizeModel(raw: OpenRouterModel): Model {
     completionPrice,
     inputModalities: raw.architecture?.input_modalities ?? [],
     outputModalities: raw.architecture?.output_modalities ?? [],
+  };
+}
+
+export function normalizeGoogleModel(raw: GoogleModel): Model {
+  const id = raw.name.replace(/^models\//, "");
+  return {
+    id,
+    name: raw.displayName ?? id,
+    provider: "Google",
+    isFree: false,
+    contextLength: raw.inputTokenLimit ?? 0,
+    promptPrice: 0,
+    completionPrice: 0,
+    inputModalities: ["text", "image"],
+    outputModalities: ["text"],
   };
 }
 

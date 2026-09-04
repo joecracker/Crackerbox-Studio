@@ -55,6 +55,7 @@ interface ComposerProps {
   visionSupported?: boolean;
   approvalPending?: boolean;
   onApprovalReply?: (text: string) => "resolved" | "ambiguous";
+  onStop?: () => void;
 }
 
 function formatSize(bytes: number): string {
@@ -73,6 +74,7 @@ export default function Composer({
   visionSupported = true,
   approvalPending = false,
   onApprovalReply,
+  onStop = undefined,
 }: ComposerProps) {
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
@@ -432,6 +434,19 @@ export default function Composer({
                 <path d="M6 13.5 13.5 6a2.1 2.1 0 0 0-3-3L3 10.5 2 14l3.5-1ZM10 3.5 12.5 6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               <span className="truncate">{modelLabel}</span>
+            </button>
+          )}
+          {effectiveBusy && onStop && (
+            <button
+              type="button"
+              onClick={onStop}
+              aria-label="Stop generating"
+              title="Stop generating"
+              className="flex h-7 w-7 items-center justify-center rounded-md bg-red-500 text-zinc-50 transition-colors hover:bg-red-400"
+            >
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <rect x="3" y="3" width="10" height="10" rx="1" fill="currentColor" />
+              </svg>
             </button>
           )}
           <div className="flex-1" />

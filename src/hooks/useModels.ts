@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { normalizeModel, sortModels } from "../data/models";
-import type { Model, OpenRouterModel } from "../data/models";
+import { normalizeGoogleModel, normalizeModel, sortModels } from "../data/models";
+import type { GoogleModel, Model, OpenRouterModel } from "../data/models";
 import { providerConfig } from "../data/providers";
 import type { ProviderId } from "../data/providers";
 
@@ -26,6 +26,18 @@ export function useModels(providerId: ProviderId = "openrouter"): UseModelsResul
 
     const load = async () => {
       try {
+        if (providerId === "google") {
+          const res = await fetch(config.modelsUrl, { signal: controller.signal });
+          if (!res.ok) throw new Error(`Request failed (${res.status})`);
+          const json = (await res.json()) as { models?: GoogleModel[] };
+          const list = sortModels(
+            (json.models ?? [])
+              .filter((m) => (m.supportedGenerationMethods ?? []).includes("generateContent"))
+              .map(normalizeGoogleModel)
+          );
+          if (!cancelled) setModels(list);
+          return;
+        }
         const res = await fetch(config.modelsUrl, { signal: controller.signal });
         if (!res.ok) throw new Error(`Request failed (${res.status})`);
         const json = (await res.json()) as { data: unknown[] };

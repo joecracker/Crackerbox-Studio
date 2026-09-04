@@ -1,14 +1,14 @@
 // Model providers Cracker Box can talk to. Each provider is an OpenAI-compatible
 // chat-completions gateway keyed by a vault token service.
 
-export type ProviderId = "openrouter" | "opencode";
+export type ProviderId = "openrouter" | "opencode" | "google";
 
 export interface ProviderConfig {
   id: ProviderId;
   label: string;
   keyLabel: string;
   keyPlaceholder: string;
-  tokenService: "openrouter" | "opencode";
+  tokenService: "openrouter" | "opencode" | "google";
   baseUrl: string;
   modelsUrl: string;
   chatUrl: string;
@@ -41,9 +41,25 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
     creditsUrl: "https://opencode.ai/zen/v1/credits",
     help: "OpenCode Zen's tested models, including free models like Big Pickle and Muse Spark Contributor. Get a key at opencode.ai/auth.",
   },
+  google: {
+    id: "google",
+    label: "Google AI Studio",
+    keyLabel: "Google AI Studio API key (chat)",
+    keyPlaceholder: "AIza…",
+    tokenService: "google",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+    modelsUrl: "https://generativelanguage.googleapis.com/v1beta/models",
+    chatUrl: "https://generativelanguage.googleapis.com/v1beta/chat/completions",
+    creditsUrl: null,
+    help: "Google's Gemini models through the OpenAI-compatible chat-completions endpoint on Google AI Studio. Get a key at aistudio.google.com.",
+  },
 };
 
-export const PROVIDER_LIST: ProviderConfig[] = [PROVIDERS.openrouter, PROVIDERS.opencode];
+export const PROVIDER_LIST: ProviderConfig[] = [
+  PROVIDERS.openrouter,
+  PROVIDERS.opencode,
+  PROVIDERS.google,
+];
 
 export function providerConfig(id: ProviderId | string | null | undefined): ProviderConfig {
   if (id && id in PROVIDERS) return PROVIDERS[id as ProviderId];

@@ -336,6 +336,14 @@ export default function DeployWizard({
                 onRemove={() => vault.clearToken("opencode")}
               />
               <TokenField
+                label="Google AI Studio API key (chat)"
+                placeholder="AIza…"
+                token={vault.tokens.google ?? ""}
+                hasToken={!!vault.tokens.google}
+                onSave={(value) => void vault.saveToken("google", value)}
+                onRemove={() => vault.clearToken("google")}
+              />
+              <TokenField
                 label="Home Assistant token (MCP)"
                 placeholder="long-lived token…"
                 token={vault.tokens.homeassistant ?? ""}

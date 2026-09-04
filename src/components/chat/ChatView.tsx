@@ -27,6 +27,7 @@ interface ChatViewProps {
   onApprove: () => void;
   onReject: () => void;
   onApprovalReply: (text: string) => "resolved" | "ambiguous";
+  onStop?: () => void;
   runtimeAvailable: boolean;
   runtimeError: string | null;
 }
@@ -53,6 +54,7 @@ export default function ChatView({
   onApprove,
   onReject,
   onApprovalReply,
+  onStop,
   runtimeAvailable,
   runtimeError,
 }: ChatViewProps) {
@@ -127,6 +129,7 @@ export default function ChatView({
         visionSupported={visionSupported}
         approvalPending={approval !== null}
         onApprovalReply={onApprovalReply}
+        onStop={onStop}
       />
     </div>
   );

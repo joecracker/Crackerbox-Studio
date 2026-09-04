@@ -41,7 +41,7 @@ const DENY_PATTERNS: { test: RegExp; reason: string }[] = [
     reason: "piping a download into a shell is not allowed",
   },
   {
-    test: /(^|[^>&])(>|>>)\s*\/\s*(etc|usr|var|bin|sbin|dev|home|root|boot|lib|opt)(\/|$)/i,
+    test: /(^|[^>&])(>|>>)\s*\/\s*(?!(?:dev\/(?:null|stdout|stderr)))(etc|usr|var|bin|sbin|dev|home|root|boot|lib|opt)(\/|$)/i,
     reason: "writing outside the project root is not allowed",
   },
   {
@@ -51,21 +51,6 @@ const DENY_PATTERNS: { test: RegExp; reason: string }[] = [
   {
     test: /\bchown\s+(-R\s+)?[^\s]+\s+(\/|\/\*|~)/i,
     reason: "changing ownership on the filesystem root is not allowed",
-  },
-  {
-    test: /^npm\s+run\s+(dev|start|serve|preview)\b/i,
-    reason:
-      "the live preview pane already runs the project's dev server — use the preview's restart button instead",
-  },
-  {
-    test: /^npm\s+start\b/i,
-    reason:
-      "the live preview pane already runs the project's dev server — use the preview's restart button instead",
-  },
-  {
-    test: /^(npx\s+)?vite(\s+|$)/i,
-    reason:
-      "the live preview pane already runs the project's dev server — use the preview's restart button instead",
   },
 ];
 

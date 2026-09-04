@@ -1328,6 +1328,7 @@ export default function App() {
                     ? chatStream.resolveApprovalWithReply(chatStream.approval.callId, reply)
                     : "ambiguous"
                 }
+                onStop={() => chatStream.abort()}
                 runtimeAvailable={webContainer.available}
                 runtimeError={webContainer.error}
               />

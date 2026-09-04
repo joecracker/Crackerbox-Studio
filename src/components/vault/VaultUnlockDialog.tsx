@@ -16,7 +16,11 @@ export default function VaultUnlockDialog({ vault, onDismiss, onGoDeploy }: Vaul
   useEffect(() => inputRef.current?.focus(), []);
 
   const hasStoredAny =
-    vault.hasStored("github") || vault.hasStored("openrouter") || vault.hasStored("homeassistant");
+    vault.hasStored("github") ||
+    vault.hasStored("openrouter") ||
+    vault.hasStored("opencode") ||
+    vault.hasStored("google") ||
+    vault.hasStored("homeassistant");
 
   if (vault.unlocked) return null;
 
