@@ -3,6 +3,7 @@ import type { ChangeEvent, ClipboardEvent, KeyboardEvent } from "react";
 import type { ChatAttachment } from "../../hooks/useChatHistory";
 
 const MAX_EMBED_SIZE = 1_500_000;
+const MAX_IMAGE_DIMENSION = 1280;
 const ACCEPT =
   "image/*,.txt,.md,.json,.js,.mjs,.cjs,.ts,.tsx,.jsx,.css,.html,.svg,.csv,.yml,.yaml,.toml,.xml,.py,.rs,.go,.java,.sh,.env";
 
@@ -62,6 +63,48 @@ function formatSize(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${bytes} B`;
+}
+
+async function shrinkImage(file: File): Promise<File> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("read failed"));
+    reader.readAsDataURL(file);
+  });
+  return new Promise<File>((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(width, height));
+      if (scale < 1) {
+        width = Math.max(1, Math.round(width * scale));
+        height = Math.max(1, Math.round(height * scale));
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        resolve(file);
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            resolve(new File([blob], file.name.replace(/\.\w+$/, ".jpg"), { type: "image/jpeg" }));
+          } else {
+            resolve(file);
+          }
+        },
+        "image/jpeg",
+        0.8
+      );
+    };
+    img.onerror = () => resolve(file);
+    img.src = dataUrl;
+  });
 }
 
 export default function Composer({
@@ -212,23 +255,41 @@ export default function Composer({
       setVisionWarning(null);
     }
     allowed.forEach((file) => {
-      const attachment: ChatAttachment = {
-        id: `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        name: file.name,
-        type: file.type || "application/octet-stream",
-        size: file.size,
+      const attach = (withDataUrl: string | undefined, blob?: Blob) => {
+        const attachment: ChatAttachment = {
+          id: `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          name: blob ? file.name.replace(/\.\w+$/, ".jpg") : file.name,
+          type: blob ? "image/jpeg" : file.type || "application/octet-stream",
+          size: blob ? blob.size : file.size,
+          dataUrl: withDataUrl,
+        };
+        setAttachments((prev) => [...prev, attachment]);
       };
-      if (file.size <= MAX_EMBED_SIZE) {
+      if (file.type.startsWith("image/") && file.size <= MAX_EMBED_SIZE) {
+        void (async () => {
+          const shrunk = await shrinkImage(file);
+          if (shrunk.size >= file.size) {
+            const reader = new FileReader();
+            reader.onload = () => {
+              attach(String(reader.result), file);
+            };
+            reader.readAsDataURL(file);
+          } else {
+            const reader = new FileReader();
+            reader.onload = () => {
+              attach(String(reader.result), shrunk);
+            };
+            reader.readAsDataURL(shrunk);
+          }
+        })();
+      } else if (file.size <= MAX_EMBED_SIZE) {
         const reader = new FileReader();
         reader.onload = () => {
-          setAttachments((prev) => [
-            ...prev,
-            { ...attachment, dataUrl: String(reader.result) },
-          ]);
+          attach(String(reader.result));
         };
         reader.readAsDataURL(file);
       } else {
-        setAttachments((prev) => [...prev, attachment]);
+        attach(undefined);
       }
     });
   };

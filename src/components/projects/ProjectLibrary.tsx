@@ -12,6 +12,7 @@ interface ProjectLibraryProps {
   onDashboardTemplate: () => void;
   onRename: (id: string) => void;
   onDelete: (id: string) => void;
+  onContext: (id: string, context: string) => void;
   onImportFolder: () => void;
   onImportZip: (file: File) => void;
   onImportData: (data: DataTransfer) => void;
@@ -40,6 +41,7 @@ export default function ProjectLibrary({
   onDashboardTemplate,
   onRename,
   onDelete,
+  onContext,
   onImportFolder,
   onImportZip,
   onImportData,
@@ -62,6 +64,10 @@ export default function ProjectLibrary({
   const [menuOpen, setMenuOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [briefOpen, setBriefOpen] = useState(false);
+  const [briefDraft, setBriefDraft] = useState(
+    () => projects.find((p) => p.id === activeProjectId)?.context ?? ""
+  );
   const zipInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
 
@@ -243,6 +249,41 @@ export default function ProjectLibrary({
           </div>
         </div>
       )}
+      <div className="mx-2 mb-1.5 shrink-0 overflow-hidden rounded-md border border-zinc-800">
+        <button
+          type="button"
+          onClick={() => setBriefOpen((v) => !v)}
+          aria-expanded={briefOpen}
+          className="flex w-full items-center gap-2 bg-zinc-900/60 px-2.5 py-1.5 text-left"
+        >
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true" className="shrink-0 text-zinc-400">
+            <path d="M2.5 6.5 8 2l5.5 4.5v7a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1v-7Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+            <path d="M5.5 14.5V9h5v5.5" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+          </svg>
+          <span className="flex-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+            Project brief
+          </span>
+          <span className="rounded bg-sky-500/15 px-1 py-px text-[9px] font-medium uppercase tracking-wider text-sky-300">
+            {briefOpen ? "hide" : "set"}
+          </span>
+        </button>
+        {briefOpen && (
+          <div className="border-t border-zinc-800 bg-zinc-950/40 p-2">
+            <textarea
+              value={briefDraft}
+              onChange={(e) => setBriefDraft(e.target.value)}
+              onBlur={() => onContext(activeProjectId, briefDraft.trim())}
+              rows={4}
+              placeholder="Short context the AI sees in every chat in this project — goals, stack, constraints. New chats read this instead of the whole conversation."
+              className="block w-full resize-y rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs leading-relaxed text-zinc-200 placeholder:text-zinc-600 focus:border-sky-600 focus:outline-none focus:ring-1 focus:ring-sky-600"
+            />
+            <p className="mt-1 text-[10px] leading-relaxed text-zinc-600">
+              Saves on your new chats: the AI knows the project brief without replaying old
+              conversations. Save happens automatically when you tap away.
+            </p>
+          </div>
+        )}
+      </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         {projects.length === 0 && (
           <p className="px-2.5 py-3 text-xs leading-relaxed text-zinc-500">

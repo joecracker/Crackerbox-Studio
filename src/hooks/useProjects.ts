@@ -15,6 +15,8 @@ export interface Project {
   origin: "seed" | "import";
   /** true = opened from outside the home network (needs a host like Cloudflare); false = served locally by Home Assistant (GitHub backup only). */
   hosted: boolean;
+  /** Short, pinned context the AI sees in every chat in this project (like a Claude project brief). */
+  context: string;
   files: DemoFile[];
 }
 
@@ -23,6 +25,7 @@ interface ProjectMeta {
   name: string;
   origin: "seed" | "import";
   hosted: boolean;
+  context: string;
 }
 
 interface ProjectsState {
@@ -37,7 +40,7 @@ interface LegacyProject extends ProjectMeta {
 const PROJECTS_KEY = "crackerbox.projects";
 
 const INITIAL_META: ProjectsState = {
-  projects: [{ id: "demo", name: "Demo Project", origin: "seed", hosted: true }],
+  projects: [{ id: "demo", name: "Demo Project", origin: "seed", hosted: true, context: "" }],
   activeProjectId: "demo",
 };
 
@@ -60,6 +63,7 @@ function readLegacy(raw: string | null): { meta: ProjectsState; files: Record<st
         name: p.name ?? "Untitled",
         origin: p.origin === "import" ? "import" : "seed",
         hosted: p.hosted !== false,
+        context: typeof p.context === "string" ? p.context : "",
       });
       if (Array.isArray(p.files)) files[p.id] = p.files;
     }
@@ -133,6 +137,7 @@ export function useProjects() {
           name: m.name,
           origin: m.origin,
           hosted: m.hosted !== false,
+          context: typeof m.context === "string" ? m.context : "",
         })),
         activeProjectId: metaRef.current.activeProjectId,
       });
@@ -157,7 +162,7 @@ export function useProjects() {
 
   const activeProject: Project =
     projects.find((p) => p.id === meta.activeProjectId) ??
-    projects[0] ?? { id: "none", name: "Untitled", origin: "seed", hosted: true, files: [] };
+    projects[0] ?? { id: "none", name: "Untitled", origin: "seed", hosted: true, context: "", files: [] };
   const activeProjectId = activeProject.id;
 
   const schedulePersist = useCallback((id: string, files: DemoFile[]) => {
@@ -176,7 +181,7 @@ export function useProjects() {
     (name: string, hosted = true): string => {
       const id = createId();
       setMeta((prev) => ({
-        projects: [...prev.projects, { id, name: name.trim() || "Untitled", origin: "seed", hosted }],
+        projects: [...prev.projects, { id, name: name.trim() || "Untitled", origin: "seed", hosted, context: "" }],
         activeProjectId: id,
       }));
       setFilesMap((prev) => ({ ...prev, [id]: [] }));
@@ -211,7 +216,7 @@ export function useProjects() {
           activeProjectId: prev.activeProjectId === id ? remaining[0].id : prev.activeProjectId,
         };
       }
-      return { projects: [{ id: freshId, name: "Untitled", origin: "seed", hosted: true }], activeProjectId: freshId };
+      return { projects: [{ id: freshId, name: "Untitled", origin: "seed", hosted: true, context: "" }], activeProjectId: freshId };
     });
     setFilesMap((prev) => {
       const next = { ...prev };
@@ -244,7 +249,7 @@ export function useProjects() {
     (name: string, result: ImportResult, hosted = true): string => {
       const id = createId();
       setMeta((prev) => ({
-        projects: [...prev.projects, { id, name: name.trim() || "Imported Project", origin: "import", hosted }],
+        projects: [...prev.projects, { id, name: name.trim() || "Imported Project", origin: "import", hosted, context: "" }],
         activeProjectId: id,
       }));
       setFilesMap((prev) => ({ ...prev, [id]: result.files }));
@@ -258,7 +263,7 @@ export function useProjects() {
     (name: string, files: DemoFile[], hosted = true): string => {
       const id = createId();
       setMeta((prev) => ({
-        projects: [...prev.projects, { id, name: name.trim() || "Project", origin: "import", hosted }],
+        projects: [...prev.projects, { id, name: name.trim() || "Project", origin: "import", hosted, context: "" }],
         activeProjectId: id,
       }));
       setFilesMap((prev) => ({ ...prev, [id]: files }));
@@ -273,6 +278,16 @@ export function useProjects() {
       setMeta((prev) => ({
         ...prev,
         projects: prev.projects.map((p) => (p.id === id ? { ...p, hosted } : p)),
+      }));
+    },
+    [setMeta]
+  );
+
+  const setProjectContext = useCallback(
+    (id: string, context: string) => {
+      setMeta((prev) => ({
+        ...prev,
+        projects: prev.projects.map((p) => (p.id === id ? { ...p, context } : p)),
       }));
     },
     [setMeta]
@@ -293,11 +308,12 @@ export function useProjects() {
         await idbSaveProjectFiles(p.id, files);
       }
       const nextMeta: ProjectsState = {
-        projects: data.projects.map(({ id, name, origin, hosted }) => ({
+        projects: data.projects.map(({ id, name, origin, hosted, context }) => ({
           id,
           name,
           origin,
           hosted: hosted !== false,
+          context: typeof context === "string" ? context : "",
         })),
         activeProjectId:
           data.activeProjectId && data.projects.some((p) => p.id === data.activeProjectId)
@@ -323,6 +339,7 @@ export function useProjects() {
     importProject,
     createFromFiles,
     setProjectHosted,
+    setProjectContext,
     restoreAll,
   };
 }

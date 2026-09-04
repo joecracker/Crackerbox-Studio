@@ -34,7 +34,7 @@ import type { WebContainer } from "@webcontainer/api";
 
 // The chat completions endpoint is provider-aware (see src/data/providers.ts);
 // the URL is passed in via ChatStreamOptions.chatUrl.
-const HISTORY_LIMIT = 40;
+const HISTORY_LIMIT = 16;
 const MAX_TOOL_ITERATIONS = 8;
 const READY_TIMEOUT_MS = 10_000;
 const TEXT_FILE_RE =
@@ -297,6 +297,23 @@ function decodeDataUrl(dataUrl: string): string {
   return new TextDecoder().decode(bytes);
 }
 
+// How many of the newest user messages keep their image attachments when we
+// rebuild the payload. Images are the single biggest token cost; re-sending a
+// screenshot from 15 messages ago on every turn is pure waste.
+const IMAGE_RETENTION_MESSAGES = 6;
+
+function stripOldImages(message: ChatMessage, keep: boolean): ChatMessage {
+  if (keep || !message.attachments?.some((a) => a.dataUrl && a.type.startsWith("image/"))) {
+    return message;
+  }
+  return {
+    ...message,
+    attachments: message.attachments.map((a) =>
+      a.dataUrl && a.type.startsWith("image/") ? { ...a, dataUrl: undefined } : a
+    ),
+  };
+}
+
 function contentFor(text: string, attachments: ChatAttachment[]): PayloadContent {
   const textAttachments = attachments.filter(
     (a) =>
@@ -325,12 +342,13 @@ function contentFor(text: string, attachments: ChatAttachment[]): PayloadContent
   return parts;
 }
 
-function messageToPayloadMessages(message: ChatMessage): PayloadMessage[] {
+function messageToPayloadMessages(message: ChatMessage, keepImages: boolean): PayloadMessage[] {
+  const m = stripOldImages(message, keepImages);
   const base: PayloadMessage = {
-    role: message.role,
-    content: contentFor(message.text, message.attachments),
+    role: m.role,
+    content: contentFor(m.text, m.attachments),
   };
-  const calls = message.toolCalls;
+  const calls = m.toolCalls;
   if (message.role !== "assistant" || !calls || calls.length === 0) return [base];
   const toolCalls: ToolCallPayload[] = calls.map((c) => ({
     id: c.id,
@@ -599,7 +617,9 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
 
       const workingPayload: PayloadMessage[] = [
         { role: "system", content: systemPrompt },
-        ...messages.slice(-HISTORY_LIMIT).flatMap(messageToPayloadMessages),
+        ...messages.slice(-HISTORY_LIMIT).flatMap((m, i, arr) =>
+          messageToPayloadMessages(m, i >= arr.length - IMAGE_RETENTION_MESSAGES)
+        ),
         { role: "user", content: contentFor(text, attachments) },
       ];
 

@@ -302,13 +302,24 @@ export default function App() {
     }
   }, [webContainer, activeFiles, projects.activeProjectId, projects.hydrated]);
 
+  const buildSystemPrompt = useCallback((): string => {
+    const parts: string[] = [personality.composePrompt(parameters.systemPrompt)];
+    const brief = projects.activeProject.context.trim();
+    if (brief) {
+      parts.push(`## Project brief\n${brief}\n\nThe brief above is fixed project context, not conversation history. Treat it as always-true background for this project.`);
+    }
+    if (chat.activeSession?.summary) {
+      parts.push(`## Archived session summary\n${chat.activeSession.summary}`);
+    }
+    parts.push(CRACKER_BOX_GUIDE);
+    return parts.join("\n\n");
+  }, [personality, parameters.systemPrompt, projects.activeProject.context, chat.activeSession?.summary]);
+
   const chatStream = useChatStream({
     activeProjectId: projects.activeProjectId,
     messages: chat.messages,
     model: parameters.selectedModelId,
-    systemPrompt: chat.activeSession?.summary
-      ? `${personality.composePrompt(parameters.systemPrompt)}\n\n## Archived session summary\n${chat.activeSession.summary}\n\n${CRACKER_BOX_GUIDE}`
-      : `${personality.composePrompt(parameters.systemPrompt)}\n\n${CRACKER_BOX_GUIDE}`,
+    systemPrompt: buildSystemPrompt(),
     temperature: parameters.temperature,
     maxTokens: parameters.maxTokens,
     getApiKey: () => providerApiKey,
@@ -1214,6 +1225,7 @@ export default function App() {
                 }
                 onRename={handleRenameProject}
                 onDelete={projects.deleteProject}
+                onContext={(id, context) => projects.setProjectContext(id, context)}
                 onImportFolder={handleImportFolder}
                 onImportZip={handleImportZip}
                 onImportData={handleImportData}
