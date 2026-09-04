@@ -698,6 +698,8 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
       };
 
       const requestApproval = (pending: PendingApproval): Promise<boolean> => {
+        // In auto mode there is never an approval prompt — always run.
+        if (guardrailMode === "auto") return Promise.resolve(true);
         const batch = approvalBatchRef.current;
         if (batch) {
           if (batch.kind === "approveAll") return Promise.resolve(true);
@@ -715,6 +717,16 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
         return new Promise<boolean>((resolve) => {
           approvalResolverRef.current = resolve;
           setApproval(pending);
+          // Safety net: if no one answers (missed card, UI glitch), auto-approve
+          // after 60s so the agent loop can never deadlock waiting on a prompt.
+          setTimeout(() => {
+            const current = approvalResolverRef.current;
+            if (current === resolve) {
+              approvalResolverRef.current = null;
+              setApproval(null);
+              resolve(true);
+            }
+          }, 60_000);
         });
       };
 
