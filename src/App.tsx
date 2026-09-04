@@ -247,6 +247,24 @@ export default function App() {
     [projects, deployQueue]
   );
 
+  const persistToWorkspace = useCallback(
+    async (path: string, content: string) => {
+      const container = webContainer.container;
+      if (container) {
+        try {
+          const result = await writeWorkspaceFile(container, path, content);
+          if (!result.ok && result.error) {
+            // container write failed (e.g. cross-origin isolation); fall through to store-only
+          }
+        } catch {
+          // best effort: still mirror to the store
+        }
+      }
+      persistFile(path, content);
+    },
+    [webContainer.container, persistFile]
+  );
+
   const syncFromContainer = useCallback(async () => {
     const container = webContainer.container;
     if (!container) return;
@@ -312,7 +330,7 @@ export default function App() {
     callExternalTool: (name, args) => {
       if (GOD_MODE_NAMES.has(name)) {
         return runGodModeTool(name, args, {
-          persistFile,
+          persistFile: persistToWorkspace,
           refreshTree: syncFromContainer,
           githubToken: vault.unlocked ? (vault.tokens.github ?? null) : null,
           tavilyKey: vault.unlocked ? (vault.tokens.tavily ?? null) : null,

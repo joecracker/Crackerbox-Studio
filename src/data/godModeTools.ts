@@ -178,7 +178,7 @@ async function repoTree(owner: string, name: string, ref: string, auth?: string 
 }
 
 interface RunnerDeps {
-  persistFile: (path: string, content: string) => void;
+  persistFile: (path: string, content: string) => Promise<void>;
   refreshTree: () => Promise<void>;
   githubToken: string | null;
   tavilyKey: string | null;
@@ -277,7 +277,7 @@ export async function runGodModeTool(
         continue;
       }
       total += bytes;
-      deps.persistFile(`${destRoot}/${file.path}`, raw);
+      await deps.persistFile(`${destRoot}/${file.path}`, raw);
       written++;
       if (written >= 400) {
         skipped.push("(500-file cap reached)");

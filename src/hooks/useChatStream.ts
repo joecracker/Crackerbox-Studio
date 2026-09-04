@@ -629,12 +629,21 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
           const path = typeof args.path === "string" ? args.path : "";
           if (name === "list_directory") {
             const result = await listDirectoryInContainer(container, path);
-            if (!result.ok) return result;
+            if (!result.ok) {
+              // Container is stale (missing files added to the store): fall back to the store tree.
+              const fs = createWorkspaceFS(workspaceFiles);
+              return executeWorkspaceTool(fs, name, rawArgs);
+            }
             const lines = formatDirectoryLines(result.entries);
             return { ok: true, content: lines.length > 0 ? lines.join("\n") : "(empty directory)" };
           }
           if (name === "read_file") {
-            return readFileInContainer(container, path);
+            const result = await readFileInContainer(container, path);
+            if (!result.ok) {
+              const fs = createWorkspaceFS(workspaceFiles);
+              return executeWorkspaceTool(fs, name, rawArgs);
+            }
+            return result;
           }
           return { ok: false, error: `Unknown tool: ${name}` };
         }
@@ -646,7 +655,9 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
         const container = await whenReady(READY_TIMEOUT_MS);
         if (container) {
           const result = await readFileInContainer(container, path);
-          return result.ok ? result.content : "";
+          if (result.ok) return result.content;
+          const oldFile = getFile(workspaceFiles, path);
+          return oldFile && oldFile.type === "file" ? (oldFile.content ?? "") : "";
         }
         const oldFile = getFile(workspaceFiles, path);
         return oldFile && oldFile.type === "file" ? (oldFile.content ?? "") : "";
