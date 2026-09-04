@@ -469,6 +469,24 @@ function looksToolRelated(reason: string): boolean {
   return /tool|tools|function|unsupported parameter|unknown parameter/i.test(reason);
 }
 
+// Runs `fn`, rejecting after `ms` if it hasn't settled. Prevents a hung tool
+// call (external fetch, MCP proxy, workspace read) from locking the agent loop.
+function withTimeout<T>(ms: number, fn: () => Promise<T>, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    fn().then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      }
+    );
+  });
+}
+
 const NETWORK_RETRY_INITIAL_DELAY = 1000;
 const NETWORK_RETRY_MAX_DURATION = 20_000;
 
@@ -1084,7 +1102,11 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
             let contentText: string;
             let ok = true;
             try {
-              contentText = await callExternalTool(call.name, parseArgs(call.arguments));
+              contentText = await withTimeout(
+                45_000,
+                () => callExternalTool(call.name, parseArgs(call.arguments)),
+                "External tool timed out."
+              );
             } catch (e) {
               ok = false;
               contentText = e instanceof Error ? e.message : "External tool call failed.";
@@ -1097,7 +1119,11 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
             continue;
           }
 
-          const result = await readWorkspace(call.name, call.arguments);
+          const result = await withTimeout(
+            15_000,
+            () => readWorkspace(call.name, call.arguments),
+            "Workspace read timed out."
+          ).catch(() => ({ ok: false as const, error: "Workspace read timed out." }));
           const contentText = result.ok ? result.content : `Error: ${result.error}`;
           patchAssistantToolCall(assistantId, call.id, {
             status: result.ok ? "done" : "error",
