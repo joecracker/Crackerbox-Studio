@@ -5,7 +5,6 @@ import type { EncryptedPayload } from "../utils/crypto";
 
 export type TokenService =
   | "github"
-  | "netlify"
   | "openrouter"
   | "opencode"
   | "tavily"
@@ -14,7 +13,6 @@ export type TokenService =
 
 interface VaultState {
   github: EncryptedPayload | null;
-  netlify: EncryptedPayload | null;
   openrouter: EncryptedPayload | null;
   opencode: EncryptedPayload | null;
   tavily: EncryptedPayload | null;
@@ -29,7 +27,6 @@ const TRUSTED_KEY = "crackerbox.vault.trusted";
 const VAULT_API = "/api/vault";
 const EMPTY_VAULT: VaultState = {
   github: null,
-  netlify: null,
   openrouter: null,
   opencode: null,
   tavily: null,
@@ -40,7 +37,6 @@ const TRUSTED_SENTINEL = "trusted";
 
 const SERVICES: TokenService[] = [
   "github",
-  "netlify",
   "openrouter",
   "opencode",
   "tavily",
@@ -93,7 +89,6 @@ export function useTokenVault(): TokenVault {
     try {
       const result: TokenMap = {};
       if (vault.github) result.github = await decryptToken(phrase, vault.github);
-      if (vault.netlify) result.netlify = await decryptToken(phrase, vault.netlify);
       if (vault.openrouter) result.openrouter = await decryptToken(phrase, vault.openrouter);
       if (vault.opencode) result.opencode = await decryptToken(phrase, vault.opencode);
       if (vault.tavily) result.tavily = await decryptToken(phrase, vault.tavily);
@@ -172,7 +167,6 @@ export function useTokenVault(): TokenVault {
     const skipped: string[] = [];
     const services = [
       "github",
-      "netlify",
       "openrouter",
       "opencode",
       "tavily",
