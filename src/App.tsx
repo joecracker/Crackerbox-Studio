@@ -630,6 +630,8 @@ export default function App() {
   interface CrackerboxBackupPayload {
     projects: Project[];
     activeProjectId: string;
+    /** All chat sessions per project id — survives cache clears now. */
+    chat?: Record<string, { sessions: unknown[]; activeSessionId: string | null }>;
     exportedAt: string;
   }
 
@@ -641,9 +643,10 @@ export default function App() {
     (): CrackerboxBackupPayload => ({
       projects: projects.projects,
       activeProjectId: projects.activeProjectId,
+      chat: chat.allSessionsByProject(),
       exportedAt: new Date().toISOString(),
     }),
-    [projects.projects, projects.activeProjectId]
+    [projects.projects, projects.activeProjectId, chat]
   );
 
   const applyRestoredBackup = useCallback(
@@ -653,10 +656,17 @@ export default function App() {
         return false;
       }
       await projects.restoreAll({ projects: data.projects, activeProjectId: data.activeProjectId });
+      if (data.chat && typeof data.chat === "object") {
+        try {
+          chat.replaceAllSessions(data.chat);
+        } catch {
+          // chat restore is best-effort — projects restore regardless
+        }
+      }
       showImportNotice(`Restored ${data.projects.length} project${data.projects.length === 1 ? "" : "s"}.`);
       return true;
     },
-    [projects, showImportNotice]
+    [projects, chat, showImportNotice]
   );
 
   const handleDriveConnect = useCallback(async () => {
@@ -1282,6 +1292,8 @@ export default function App() {
                   deploySettings.saveTarget(target);
                   deployQueue.clearDirty(projects.activeProjectId);
                 }}
+                onBuildBackupJson={() => JSON.stringify(buildBackupPayload())}
+                onApplyBackupData={(data) => applyRestoredBackup(data as Partial<CrackerboxBackupPayload>)}
               />
             )}
             {sidebarTab === "settings" && (

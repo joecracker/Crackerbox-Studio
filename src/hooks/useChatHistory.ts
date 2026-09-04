@@ -327,6 +327,10 @@ export function useChatHistory(activeProjectId: string) {
     sessions,
     activeSession,
     activeSessionId: activeSession?.id ?? null,
+    /** All sessions across every project (for cloud backup). */
+    allSessionsByProject: () => byProject,
+    /** Replace every project's chat sessions from a backup payload. */
+    replaceAllSessions: (data: unknown) => setRawByProject(migrateShape(data as PersistedShape)),
     createSession,
     selectSession,
     renameSession,

@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { usePersistentState } from "./usePersistentState";
-import { decryptToken, deriveVaultLookupKey, encryptToken } from "../utils/crypto";
+import {
+  decryptToken,
+  deriveBackupLookupKey,
+  deriveVaultLookupKey,
+  encryptToken,
+} from "../utils/crypto";
 import type { EncryptedPayload } from "../utils/crypto";
 
 export type TokenService =
@@ -65,6 +70,10 @@ export interface TokenVault {
   importTokens: (json: string) => Promise<{ imported: TokenService[]; skipped: string[] }>;
   syncToCloud: (passphraseOverride?: string) => Promise<boolean>;
   restoreFromCloud: (passphraseOverride?: string) => Promise<boolean>;
+  /** Back up projects + chat to the cloud, encrypted with the passphrase. */
+  syncBackup: (payloadJson: string, passphraseOverride?: string) => Promise<boolean>;
+  /** Fetch and decrypt the cloud backup, returns JSON or null when empty. */
+  restoreBackup: (passphraseOverride?: string) => Promise<string | null>;
   cloudNeedsPassphrase: boolean;
   cloudStatus: string | null;
   busy: boolean;
@@ -324,6 +333,83 @@ export function useTokenVault(): TokenVault {
     }
   };
 
+  // Cloud backup of the project + chat payload (encrypted with the real
+  // passphrase, stored under a derivative key so it never collides with the
+  // token vault). The backup is an atomic snapshot of projects + chats.
+  const syncBackup = async (payloadJson: string, passphraseOverride?: string): Promise<boolean> => {
+    setError(null);
+    setCloudStatus(null);
+    const phrase = resolveCloudPhrase(passphraseOverride);
+    if (!phrase) {
+      setError(
+        isTrustedUnlock
+          ? "Enter your vault passphrase to back up projects & chats (trusted-device unlock doesn't carry it)."
+          : "Unlock the vault first to back up projects & chats."
+      );
+      return false;
+    }
+    setBusy(true);
+    try {
+      const key = await deriveBackupLookupKey(phrase);
+      const sealed = await encryptToken(phrase, payloadJson);
+      const res = await fetch(`${VAULT_API}?key=${encodeURIComponent(key)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(sealed),
+      });
+      const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || `Cloud backup failed (HTTP ${res.status}).`);
+      }
+      setCloudStatus("Projects & chats backed up to the cloud.");
+      return true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Cloud backup failed.");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const restoreBackup = async (passphraseOverride?: string): Promise<string | null> => {
+    setError(null);
+    setCloudStatus(null);
+    const phrase = resolveCloudPhrase(passphraseOverride);
+    if (!phrase) {
+      setError(
+        isTrustedUnlock
+          ? "Enter your vault passphrase to restore projects & chats (trusted-device unlock doesn't carry it)."
+          : "Unlock the vault first to restore projects & chats."
+      );
+      return null;
+    }
+    setBusy(true);
+    try {
+      const key = await deriveBackupLookupKey(phrase);
+      const res = await fetch(`${VAULT_API}?key=${encodeURIComponent(key)}`);
+      const data = (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        error?: string;
+        vault?: EncryptedPayload | null;
+      } | null;
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || `Cloud restore failed (HTTP ${res.status}).`);
+      }
+      if (!data.vault) {
+        setCloudStatus("No cloud backup found yet — back up once from a device that has your work.");
+        return null;
+      }
+      const json = await decryptToken(phrase, data.vault);
+      setCloudStatus("Cloud backup downloaded & decrypted.");
+      return json;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Cloud restore failed.");
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return {
     unlocked: passphrase !== null,
     trusted: passphrase === TRUSTED_SENTINEL,
@@ -338,6 +424,8 @@ export function useTokenVault(): TokenVault {
     importTokens,
     syncToCloud,
     restoreFromCloud,
+    syncBackup,
+    restoreBackup,
     cloudStatus,
     busy,
     error,

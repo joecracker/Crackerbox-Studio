@@ -112,3 +112,27 @@ export async function deriveVaultLookupKey(passphrase: string): Promise<string> 
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 }
+
+// Separate, deterministic lookup key for the cloud backup payload (projects +
+// chat), so it never collides with the token vault. Same passphrase-derived
+// scheme; brute-forcing costs the same as the vault.
+const BACKUP_LOOKUP_SALT = "crackerbox-backup-lookup-v1";
+
+export async function deriveBackupLookupKey(passphrase: string): Promise<string> {
+  const subtle = requireSubtle();
+  const material = await subtle.importKey(
+    "raw",
+    new TextEncoder().encode(passphrase),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  const bits = await subtle.deriveBits(
+    { name: "PBKDF2", hash: "SHA-256", salt: new TextEncoder().encode(BACKUP_LOOKUP_SALT), iterations: DEFAULT_ITERATIONS },
+    material,
+    256
+  );
+  return Array.from(new Uint8Array(bits))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}

@@ -24,6 +24,8 @@ interface DeployWizardProps {
     siteName: string;
     repoPrivate: boolean;
   }) => void;
+  onBuildBackupJson: () => string;
+  onApplyBackupData: (data: unknown) => Promise<boolean>;
 }
 
 type Step = "accounts" | "configure" | "deploy";
@@ -141,6 +143,8 @@ export default function DeployWizard({
   autoStatus,
   onDeployQueued,
   onDeploySuccess,
+  onBuildBackupJson,
+  onApplyBackupData,
 }: DeployWizardProps) {
   const [step, setStep] = useState<Step>("accounts");
   const [cloudPhrase, setCloudPhrase] = useState("");
@@ -433,6 +437,33 @@ export default function DeployWizard({
                   className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:border-emerald-600 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Restore from cloud
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void vault.syncBackup(onBuildBackupJson(), cloudPhrase)}
+                  disabled={vault.busy}
+                  className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:border-sky-600 hover:text-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Backup projects &amp; chats
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void (async () => {
+                      const json = await vault.restoreBackup(cloudPhrase);
+                      if (!json) return;
+                      try {
+                        const parsed = JSON.parse(json) as unknown;
+                        await onApplyBackupData(parsed);
+                      } catch {
+                        // status set by the vault hook or apply handler
+                      }
+                    })();
+                  }}
+                  disabled={vault.busy}
+                  className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:border-sky-600 hover:text-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Restore projects &amp; chats
                 </button>
                 {vault.cloudStatus && (
                   <p className="w-full break-words text-[11px] text-emerald-400/90">{vault.cloudStatus}</p>
