@@ -1,0 +1,7 @@
+name = "crackerbox-studio"
+pages_build_output_dir = "dist"
+compatibility_date = "2024-01-01"
+
+[[kv_namespaces]]
+binding = "VAULT_KV"
+id = "a314e0914e2c4045aacd5c381598c6a1"
