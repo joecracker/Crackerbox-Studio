@@ -1305,12 +1305,6 @@ export default function App() {
                 }}
                 onSend={handleChatSend}
                 onOpenParameters={() => setParametersOpen(true)}
-                contextLevel={contextGuard.level}
-                contextPercent={contextGuard.percent}
-                contextBusy={contextGuard.handingOff}
-                contextError={contextGuard.handoffError}
-                contextModel={contextGuard.handoffModel}
-                onStartHandoff={() => void contextGuard.startHandoff()}
                 streaming={chatStream.busy}
                 sendDisabled={sendBlockedReason !== null}
                 sendDisabledReason={sendBlockedReason}
