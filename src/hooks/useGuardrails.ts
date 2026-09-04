@@ -9,7 +9,7 @@ export interface GuardrailsState {
 
 export function useGuardrails() {
   const [state, setState] = usePersistentState<GuardrailsState>(GUARDRAILS_KEY, {
-    mode: "tiered",
+    mode: "auto",
   });
 
   const setMode = (mode: GuardrailMode) => setState((prev) => ({ ...prev, mode }));

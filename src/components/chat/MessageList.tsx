@@ -225,7 +225,7 @@ function MessageBubble({ message, streaming }: { message: ChatMessage; streaming
             ))}
           </span>
         ) : (
-          message.text && <p className="whitespace-pre-wrap break-words">{message.text}</p>
+          message.text && <p className="message-text whitespace-pre-wrap break-words">{message.text}</p>
         )}
         {!isUser && message.toolCalls && message.toolCalls.length > 0 && (
           <div className="mt-2 flex flex-col gap-1">

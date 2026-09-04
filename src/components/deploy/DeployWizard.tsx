@@ -259,7 +259,7 @@ export default function DeployWizard({
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="no-select flex min-h-0 flex-1 flex-col">
       <div className="px-3 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
         Deploy
       </div>

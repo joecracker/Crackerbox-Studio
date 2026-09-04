@@ -35,7 +35,7 @@ import type { WebContainer } from "@webcontainer/api";
 // The chat completions endpoint is provider-aware (see src/data/providers.ts);
 // the URL is passed in via ChatStreamOptions.chatUrl.
 const HISTORY_LIMIT = 16;
-const MAX_TOOL_ITERATIONS = 8;
+const MAX_TOOL_ITERATIONS = 200;
 const READY_TIMEOUT_MS = 10_000;
 const TEXT_FILE_RE =
   /\.(txt|md|markdown|json|js|jsx|mjs|cjs|ts|tsx|css|html|svg|csv|yml|yaml|toml|xml|py|rs|go|java|sh|env)$/i;

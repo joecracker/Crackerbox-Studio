@@ -16,6 +16,33 @@ body {
   color: #fafafa;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* Prevent the long-press callout/selection popup on the app chrome. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-callout: none;
+}
+
+/* Re-enable text selection where it matters: chat messages, composer, and code. */
+.message-text,
+[data-selectable] textarea,
+[data-selectable] input,
+textarea,
+input,
+pre,
+code {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+  touch-callout: default;
+}
+
+/* Deploy / vault / preview chrome: no long-press callout. */
+.no-select {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-callout: none;
 }
 
 ::selection {

@@ -2,7 +2,6 @@ import type { DirEnt, WebContainer, WebContainerProcess } from "@webcontainer/ap
 import { formatBytes, normalizePath } from "./workspace";
 import type { DirectoryEntry } from "./workspace";
 import type { DemoFile } from "../data/demoFiles";
-import { tokenizeCommand } from "./commandGuard";
 import { isLikelyBinaryBytes, SYNC_EXCLUDED_DIRS, SYNC_MAX_FILE_BYTES } from "./ignoreRules";
 
 export type WriteWorkspaceFileResult = { ok: true; size: number } | { ok: false; error: string };
@@ -193,13 +192,16 @@ export async function runCommandInContainer(
   command: string,
   timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<CommandResult> {
-  const tokens = tokenizeCommand(command);
-  if (tokens.length === 0) {
+  if (!command.trim()) {
     return { ok: false, exitCode: -1, output: "", timedOut: false, error: "Empty command." };
   }
   let proc: WebContainerProcess;
   try {
-    proc = await container.spawn(tokens[0], tokens.slice(1));
+    // Run through a POSIX shell so pipes, redirects, globs, and standard tools
+    // (grep/find/sed/awk/cat/ls) behave like a real terminal. WebContainer's
+    // spawn uses /bin/sh-compatible execution; passing the whole command to
+    // the shell preserves multi-word args, `|`, `>`, and shell builtins.
+    proc = await container.spawn("/bin/sh", ["-c", command]);
   } catch (e) {
     const message = e instanceof Error ? e.message : "spawn failed";
     return { ok: false, exitCode: -1, output: "", timedOut: false, error: message };
