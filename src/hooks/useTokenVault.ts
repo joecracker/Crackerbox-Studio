@@ -59,8 +59,9 @@ export interface TokenVault {
   clearToken: (service: TokenService) => void;
   exportTokens: () => string;
   importTokens: (json: string) => Promise<{ imported: TokenService[]; skipped: string[] }>;
-  syncToCloud: () => Promise<boolean>;
-  restoreFromCloud: () => Promise<boolean>;
+  syncToCloud: (passphraseOverride?: string) => Promise<boolean>;
+  restoreFromCloud: (passphraseOverride?: string) => Promise<boolean>;
+  cloudNeedsPassphrase: boolean;
   cloudStatus: string | null;
   busy: boolean;
   error: string | null;
@@ -77,6 +78,7 @@ export function useTokenVault(): TokenVault {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cloudStatus, setCloudStatus] = useState<string | null>(null);
+  const isTrustedUnlock = passphrase === TRUSTED_SENTINEL;
 
   const hasStored = (service: TokenService) =>
     vault[service] !== null || trusted[service] !== undefined;
@@ -182,26 +184,38 @@ export function useTokenVault(): TokenVault {
     return { imported, skipped };
   };
 
-  // Cloud vault: push the ENCRYPTED vault state to Cloudflare KV, keyed by a
-  // passphrase-derived hash. The server only ever stores ciphertext, so the
-  // vault survives cache clears and can be pulled back on any device with the
-  // same passphrase. We always re-encrypt from the currently-unlocked tokens so
-  // devices with "Trust this device" (which keep tokens in plaintext locally)
-  // still upload a proper encrypted vault.
-  const syncToCloud = async (): Promise<boolean> => {
+  // Resolves the REAL passphrase for cloud ops. When a device was auto-unlocked
+// via "Trust this device" (passphrase is a sentinel, not a real phrase), the
+// caller must supply their passphrase so the same key + ciphertext is produced
+// on every device.
+  const resolveCloudPhrase = (override?: string): string | null => {
+    if (override && override.trim()) return override.trim();
+    if (!isTrustedUnlock && passphrase) return passphrase;
+    return null;
+  };
+
+  // Cloud sync: push the tokens (re-encrypted with the REAL passphrase) to
+  // Cloudflare KV, keyed by the passphrase-derived hash. Any device that knows
+  // the passphrase can restore. Never uses the trusted-device sentinel.
+  const syncToCloud = async (passphraseOverride?: string): Promise<boolean> => {
     setError(null);
     setCloudStatus(null);
-    if (!passphrase) {
-      setError("Unlock the vault first to sync to the cloud.");
+    const phrase = resolveCloudPhrase(passphraseOverride);
+    if (!phrase) {
+      setError(
+        isTrustedUnlock
+          ? "Enter your vault passphrase to sync to the cloud (trusted-device unlock doesn't carry it)."
+          : "Unlock the vault first to sync to the cloud.",
+      );
       return false;
     }
     setBusy(true);
     try {
-      const key = await deriveVaultLookupKey(passphrase);
+      const key = await deriveVaultLookupKey(phrase);
       const sealed: VaultState = { ...EMPTY_VAULT };
       for (const service of SERVICES) {
         const plain = tokens[service];
-        if (plain) sealed[service] = await encryptToken(passphrase, plain);
+        if (plain) sealed[service] = await encryptToken(phrase, plain);
       }
       const res = await fetch(`${VAULT_API}?key=${encodeURIComponent(key)}`, {
         method: "PUT",
@@ -222,16 +236,21 @@ export function useTokenVault(): TokenVault {
     }
   };
 
-  const restoreFromCloud = async (): Promise<boolean> => {
+  const restoreFromCloud = async (passphraseOverride?: string): Promise<boolean> => {
     setError(null);
     setCloudStatus(null);
-    if (!passphrase) {
-      setError("Unlock the vault first to restore from the cloud.");
+    const phrase = resolveCloudPhrase(passphraseOverride);
+    if (!phrase) {
+      setError(
+        isTrustedUnlock
+          ? "Enter your vault passphrase to restore from the cloud (trusted-device unlock doesn't carry it)."
+          : "Unlock the vault first to restore from the cloud.",
+      );
       return false;
     }
     setBusy(true);
     try {
-      const key = await deriveVaultLookupKey(passphrase);
+      const key = await deriveVaultLookupKey(phrase);
       const res = await fetch(`${VAULT_API}?key=${encodeURIComponent(key)}`);
       const data = (await res.json().catch(() => null)) as {
         ok?: boolean;
@@ -242,11 +261,9 @@ export function useTokenVault(): TokenVault {
         throw new Error(data?.error || `Cloud restore failed (HTTP ${res.status}).`);
       }
       if (!data.vault) {
-        setCloudStatus("No cloud vault found for this passphrase. Sync once from a device that has tokens.");
+        setCloudStatus("No tokens are stored in the cloud yet. Sync once from a device that has tokens.");
         return false;
       }
-      // Re-encrypt the restored ciphertext with this device's (identical)
-      // passphrase and merge into the local vault + unlocked tokens.
       const result: TokenMap = {};
       const restored = data.vault;
       let hadPayloads = false;
@@ -255,7 +272,7 @@ export function useTokenVault(): TokenVault {
         if (payload) {
           hadPayloads = true;
           try {
-            result[service] = await decryptToken(passphrase, payload);
+            result[service] = await decryptToken(phrase, payload);
           } catch {
             // token sealed with a different passphrase — skip
           }
@@ -268,7 +285,7 @@ export function useTokenVault(): TokenVault {
         count > 0
           ? `Restored ${count} token(s) from the cloud.`
           : hadPayloads
-            ? "Cloud vault found, but no tokens could be decrypted with this passphrase — double-check you typed it exactly."
+            ? "Cloud vault found, but no tokens could be decrypted with this passphrase — double-check you typed it."
             : "No tokens are stored in the cloud yet. Sync once from a device that has tokens."
       );
       return count > 0;
@@ -283,6 +300,7 @@ export function useTokenVault(): TokenVault {
   return {
     unlocked: passphrase !== null,
     trusted: passphrase === TRUSTED_SENTINEL,
+    cloudNeedsPassphrase: passphrase === TRUSTED_SENTINEL,
     tokens,
     hasStored,
     unlock,

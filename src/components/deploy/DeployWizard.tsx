@@ -143,6 +143,7 @@ export default function DeployWizard({
   onDeploySuccess,
 }: DeployWizardProps) {
   const [step, setStep] = useState<Step>("accounts");
+  const [cloudPhrase, setCloudPhrase] = useState("");
   const [passphrase, setPassphrase] = useState("");
   const [passphraseConfirm, setPassphraseConfirm] = useState("");
   const [trustDevice, setTrustDevice] = useState(false);
@@ -394,9 +395,24 @@ export default function DeployWizard({
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
                   Cloud vault (survives clearing your cache)
                 </span>
+                {vault.cloudNeedsPassphrase && (
+                  <div className="w-full">
+                    <input
+                      type="password"
+                      value={cloudPhrase}
+                      onChange={(e) => setCloudPhrase(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void vault.syncToCloud(cloudPhrase);
+                      }}
+                      placeholder="Enter your vault passphrase to sync/restore"
+                      autoComplete="off"
+                      className="h-8 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    />
+                  </div>
+                )}
                 <button
                   type="button"
-                  onClick={() => void vault.syncToCloud()}
+                  onClick={() => void vault.syncToCloud(cloudPhrase)}
                   disabled={vault.busy}
                   className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:border-emerald-600 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -404,7 +420,7 @@ export default function DeployWizard({
                 </button>
                 <button
                   type="button"
-                  onClick={() => void vault.restoreFromCloud()}
+                  onClick={() => void vault.restoreFromCloud(cloudPhrase)}
                   disabled={vault.busy}
                   className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:border-emerald-600 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
                 >
