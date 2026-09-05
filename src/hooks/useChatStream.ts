@@ -689,6 +689,7 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
       let toolMessagesPushed = false;
       let toolIterations = 0;
       let nudgedEmptyFinish = 0;
+      let emptyWriteCount = 0;
       let accPrompt = 0;
       let accCompletion = 0;
 
@@ -1076,12 +1077,19 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
             // means the streamed JSON got truncated. Report it instead of
             // writing zero-byte files over and over.
             if (call.name === "write_file" && content.length === 0) {
+              emptyWriteCount++;
               const zeroText =
-                "Rejected: write_file had no content (truncated tool arguments). " +
-                "Please call write_file again with the full file content.";
+                emptyWriteCount >= 2
+                  ? "STOP: write_file was requested 2+ times without content. The tool call " +
+                    "arguments must be a JSON object with BOTH \"path\" (string) and \"content\" " +
+                    "(string). You previously read the file — provide the full contents now, or " +
+                    "tell the user you cannot complete the write."
+                  : "Rejected: write_file must include BOTH \"path\" and \"content\" as a JSON object. " +
+                    "Emit one write_file call with {\"path\":\"…\",\"content\":\"…\"} containing the " +
+                    "complete file contents — do not send empty arguments.";
               patchAssistantToolCall(assistantId, call.id, { status: "error", result: zeroText });
               pushToolResult(call.id, zeroText);
-              recordStreamLog({ event: "write_rejected_empty", path });
+              recordStreamLog({ event: "write_rejected_empty", path, count: emptyWriteCount });
               continue;
             }
             const oldContent = await withTimeout(
