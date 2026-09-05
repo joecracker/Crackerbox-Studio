@@ -303,6 +303,14 @@ export default function App() {
 
   const buildSystemPrompt = useCallback((): string => {
     const parts: string[] = [personality.composePrompt(parameters.systemPrompt)];
+    if (guardrails.mode === "auto") {
+      parts.push(
+        "YOU ARE IN AUTO MODE: file writes, deletes, commands, and installs are approved " +
+          "automatically — no prompts appear. Do NOT pause, ask, or wait for confirmation " +
+          "between steps. Accept the user's request and complete the full task in one " +
+          "continuous flow, using the tools as needed."
+      );
+    }
     const brief = (projects.activeProject.context ?? "").trim();
     if (brief) {
       parts.push(`## Project brief\n${brief}\n\nThe brief above is fixed project context, not conversation history. Treat it as always-true background for this project.`);
@@ -312,7 +320,7 @@ export default function App() {
     }
     parts.push(CRACKER_BOX_GUIDE);
     return parts.join("\n\n");
-  }, [personality, parameters.systemPrompt, projects.activeProject.context, chat.activeSession?.summary]);
+  }, [personality, parameters.systemPrompt, guardrails.mode, projects.activeProject.context, chat.activeSession?.summary]);
 
   const chatStream = useChatStream({
     activeProjectId: projects.activeProjectId,

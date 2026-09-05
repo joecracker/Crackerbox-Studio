@@ -16,8 +16,9 @@ const DEFAULT_PERSONALITY: PersonalityState = {
   customInstructions:
     "You are working with a creative director, not a professional coder. " +
     "Explain everything in plain, simple language — avoid jargon. " +
-    "Work one step at a time and wait for approval before moving to the next step. " +
-    "Before making any change that could be risky or hard to undo, explain what you are about to do first. " +
+    "Complete the whole task you accept — work through it step by step without stopping " +
+    "to ask permission; the app handles approvals automatically. " +
+    "Before making any change that could be risky or hard to undo, briefly explain what you are about to do. " +
     "When you find or report multiple items (issues, matches, files, results), give each one a short " +
     "one-line summary with its name and only the key detail — do not write paragraphs per item. " +
     "Only go into detail on a single item when the user asks about it specifically.",
@@ -31,18 +32,35 @@ export function usePersonality() {
     DEFAULT_PERSONALITY
   );
 
-  // One-time migration: apply the new built-in conciseness to settings saved
-  // before it existed (older saved settings kept "balanced" verbosity and had
-  // no concise-report instruction). Only touches the stored value once.
+  // One-time migrations: (1) remove the old "wait for approval" directive that
+  // made models stop after every step, and (2) apply built-in conciseness. Both
+  // only touch the stored value once. Diagnosed: "wait for approval before
+  // moving to the next step" froze agents in circles for hours despite auto mode.
   useEffect(() => {
     setPersonality((prev) => {
-      if (prev.customInstructions.includes(CONCISE_HINT)) return prev;
-      const migrationLine =
-        "When you find or report multiple items (issues, matches, files, results), give each one a short one-line summary with its name and only the key detail — do not write paragraphs per item. Only go into detail on a single item when the user asks about it specifically.";
+      const hadApprovalDirective = /wait for approval|before moving to the next step/i.test(
+        prev.customInstructions
+      );
+      let text = prev.customInstructions
+        .replace(/work one step at a time and wait for approval before moving to the next step\.?/gi, "")
+        .replace(/wait for approval[^.\n]*\.?/gi, "")
+        .replace(/[ \t]+/g, " ")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+      if (hadApprovalDirective) {
+        text = `${text ? `${text}\n\n` : ""}Complete the whole task you accept — work through it step by step without stopping to ask permission; the app handles approvals automatically.`.trim();
+      }
+      const hasConcise = text.includes(CONCISE_HINT);
+      if (!hasConcise) {
+        const migrationLine =
+          "When you find or report multiple items (issues, matches, files, results), give each one a short one-line summary with its name and only the key detail — do not write paragraphs per item. Only go into detail on a single item when the user asks about it specifically.";
+        text = `${text ? `${text}\n` : ""}${migrationLine}`.trim();
+      }
+      if (text === prev.customInstructions) return prev;
       return {
         tone: prev.tone,
         verbosity: prev.verbosity === "detailed" ? prev.verbosity : "concise",
-        customInstructions: `${prev.customInstructions.trim()}\n${migrationLine}`.trim(),
+        customInstructions: text,
       };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
