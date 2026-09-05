@@ -774,7 +774,21 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
           if (parsed !== null && typeof parsed === "object") return parsed as Record<string, unknown>;
           return {};
         } catch {
-          return {};
+          // JSON.parse failed (truncated/malformed chunk JSON). Try a tolerant
+          // extraction so a truncated write_file still keeps its large content.
+          const content = /"content"\s*:\s*("(?:[^"\\]|\\.)*"?)/s.exec(raw);
+          if (content) {
+            try {
+              const value = JSON.parse(content[1]) as unknown;
+              if (typeof value === "string") return { content: value };
+            } catch {
+              // even the tolerant extract failed — return empty
+            }
+          }
+          const path = /"path"\s*:\s*"([^"]*)"/s.exec(raw);
+          const res: Record<string, unknown> = {};
+          if (path) res.path = path[1];
+          return res;
         }
       };
 
