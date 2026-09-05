@@ -31,11 +31,11 @@ export default function PersonalitySettings({
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div>
       <div className="px-3 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
         Settings
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
+      <div className="px-3 pb-4">
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
           Personality
         </p>

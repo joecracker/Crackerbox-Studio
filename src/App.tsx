@@ -1307,7 +1307,7 @@ export default function App() {
               />
             )}
             {sidebarTab === "settings" && (
-              <>
+              <div className="min-h-0 flex-1 overflow-y-auto">
                 <PersonalitySettings
                   personality={personality}
                   baseSystemPrompt={parameters.systemPrompt}
@@ -1319,7 +1319,7 @@ export default function App() {
                 <div className="px-3 pb-4">
                   <DiagnosticsPanel />
                 </div>
-              </>
+              </div>
             )}
           </Sidebar>
           {!sidebarCollapsed && (
