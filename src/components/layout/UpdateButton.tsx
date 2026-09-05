@@ -26,7 +26,22 @@ export default function UpdateButton() {
   );
 
   const reloadFresh = useCallback(() => {
-    window.location.href = `${baseRef.current}?fresh=${Date.now()}`;
+    // Bypass any service-worker cache entirely: unregister SWs, then hard-load.
+    if ("serviceWorker" in navigator && "caches" in window) {
+      void (async () => {
+        try {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map((r) => r.unregister()));
+          const keys = await caches.keys();
+          await Promise.all(keys.map((k) => caches.delete(k)));
+        } catch {
+          // best effort — reload still happens below
+        }
+        window.location.replace(window.location.href.split("?")[0] + "?fresh=" + Date.now());
+      })();
+      return;
+    }
+    window.location.replace(window.location.href.split("?")[0] + "?fresh=" + Date.now());
   }, []);
 
   const check = useCallback(async (flashWhenUpToDate = false): Promise<boolean> => {
@@ -83,15 +98,18 @@ export default function UpdateButton() {
       onClick={handleClick}
       title={title}
       aria-label={title}
-      className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-zinc-800 hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
+      aria-live="polite"
+      className={`flex h-8 items-center gap-1.5 rounded-md px-2 transition-colors hover:bg-zinc-800 hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
         updateAvailable
-          ? "bg-sky-500/15 text-sky-300"
+          ? "bg-sky-500/25 text-sky-200 ring-1 ring-sky-500/50"
           : status === "uptodate"
-            ? "bg-emerald-500/15 text-emerald-300"
-            : "text-zinc-300"
+            ? "bg-emerald-500/20 text-emerald-200"
+            : status === "checking"
+              ? "bg-zinc-800 text-zinc-300"
+              : "text-zinc-300"
       }`}
     >
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true" className={status === "checking" ? "animate-spin" : ""}>
         <path
           d="M8 2.5a5.5 5.5 0 1 1-4.8 8.2M3.5 13.5V9.8h3.7"
           stroke="currentColor"
@@ -100,6 +118,8 @@ export default function UpdateButton() {
           strokeLinejoin="round"
         />
       </svg>
+      {updateAvailable && <span className="text-[10px] font-semibold tracking-wide">Update</span>}
+      {status === "uptodate" && <span className="text-[10px] font-semibold tracking-wide">Up to date</span>}
     </button>
   );
 }
