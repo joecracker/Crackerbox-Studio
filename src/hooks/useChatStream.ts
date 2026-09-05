@@ -688,6 +688,7 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
       let toolsTier = 2;
       let toolMessagesPushed = false;
       let toolIterations = 0;
+      let nudgedEmptyFinish = 0;
       let accPrompt = 0;
       let accCompletion = 0;
 
@@ -980,6 +981,21 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
         if (callDrafts.length === 0) {
           if (receivedText === "") {
             recordStreamLog({ event: "empty_finish", toolIterations });
+            // The model ran tools but then ended its turn with no text and no
+            // further tool call. Instead of stopping dead, nudge it ONCE to
+            // produce the actual answer using what it learned.
+            if (toolIterations > 0 && nudgedEmptyFinish < 1) {
+              nudgedEmptyFinish++;
+              workingPayload.push({
+                role: "user",
+                content:
+                  "Your recent tool results are in. There are no more tools to call for now — " +
+                  "please produce the final answer/implementation directly now. Do not call tools again.",
+              });
+              recordStreamLog({ event: "empty_finish_nudge" });
+              continue;
+            }
+            return finish({ ok: true, error: null });
           }
           return finish({ ok: true, error: null });
         }
