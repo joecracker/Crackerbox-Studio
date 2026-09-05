@@ -770,7 +770,9 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
 
       const parseArgs = (raw: string): Record<string, unknown> => {
         try {
-          return raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+          const parsed = raw ? (JSON.parse(raw) as unknown) : {};
+          if (parsed !== null && typeof parsed === "object") return parsed as Record<string, unknown>;
+          return {};
         } catch {
           return {};
         }
@@ -1047,8 +1049,27 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
           const args = parseArgs(call.arguments);
           const path = typeof args.path === "string" ? args.path : "";
           const content = typeof args.content === "string" ? args.content : "";
+          recordStreamLog({
+            event: "tool_call_args",
+            name: call.name,
+            path,
+            contentLength: content.length,
+            argsRawLength: call.arguments.length,
+          });
 
           if (call.name === "write_file" || call.name === "delete_file") {
+            // Guard against empty writes: a write with no content almost always
+            // means the streamed JSON got truncated. Report it instead of
+            // writing zero-byte files over and over.
+            if (call.name === "write_file" && content.length === 0) {
+              const zeroText =
+                "Rejected: write_file had no content (truncated tool arguments). " +
+                "Please call write_file again with the full file content.";
+              patchAssistantToolCall(assistantId, call.id, { status: "error", result: zeroText });
+              pushToolResult(call.id, zeroText);
+              recordStreamLog({ event: "write_rejected_empty", path });
+              continue;
+            }
             const oldContent = await withTimeout(
               15_000,
               () => readPathContent(path),
