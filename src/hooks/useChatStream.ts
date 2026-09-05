@@ -685,7 +685,7 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
       const fileIndex = buildFileIndex(workspaceFiles);
 
       let receivedText = "";
-      let toolsEnabled = true;
+      let toolsTier = 2;
       let toolMessagesPushed = false;
       let toolIterations = 0;
       let accPrompt = 0;
@@ -696,6 +696,7 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
         model,
         text: text.slice(0, 120),
         historyMessages: messages.length,
+        toolsAvailable: [...toolsFor(webContainer, webContainerAvailable), ...(extraTools ?? [])].length,
       });
 
       const finish = (result: ChatStreamResult): ChatStreamResult => {
@@ -856,9 +857,12 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
                 temperature,
                 max_tokens: maxTokens,
                 stream_options: { include_usage: true },
-                ...(toolsEnabled
+                ...(toolsTier > 0
                   ? {
-                      tools: [...toolsFor(webContainer, webContainerAvailable), ...(extraTools ?? [])],
+                      tools:
+                        toolsTier === 2
+                          ? [...toolsFor(webContainer, webContainerAvailable), ...(extraTools ?? [])]
+                          : toolsFor(webContainer, webContainerAvailable),
                       tool_choice: "auto" as const,
                     }
                   : {}),
@@ -897,13 +901,17 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
             // non-JSON error body
           }
           if (!reason) reason = statusReason(res.status, model);
-          if (
-            toolsEnabled &&
-            !toolMessagesPushed &&
-            res.status === 400 &&
-            looksToolRelated(reason)
-          ) {
-            toolsEnabled = false;
+          if (toolsTier > 0 && !toolMessagesPushed && res.status === 400 && looksToolRelated(reason)) {
+            recordStreamLog({ event: "tools_rejected", tier: toolsTier, reason });
+            if (toolsTier === 2) {
+              // Some provider rejected the external/MCP tools (e.g. Home
+              // Assistant schemas). Retry with CORE workspace tools only —
+              // write/read/run must keep working.
+              toolsTier = 1;
+              continue;
+            }
+            // Even core tools are rejected — this model doesn't accept tools.
+            toolsTier = 0;
             continue;
           }
           return fail(reason);
