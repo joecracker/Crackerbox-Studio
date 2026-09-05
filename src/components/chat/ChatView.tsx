@@ -16,6 +16,8 @@ interface ChatViewProps {
   sendDisabledReason: string | null;
   streamError: string | null;
   onDismissStreamError: () => void;
+  emptyTurn: { toolIterations: number } | null;
+  onDismissEmptyTurn: () => void;
   modelLabel: string | null;
   visionSupported: boolean;
   approval: PendingApproval | null;
@@ -39,6 +41,8 @@ export default function ChatView({
   sendDisabledReason,
   streamError,
   onDismissStreamError,
+  emptyTurn,
+  onDismissEmptyTurn,
   modelLabel,
   visionSupported,
   approval,
@@ -106,6 +110,39 @@ export default function ChatView({
             onClick={onDismissStreamError}
             aria-label="Dismiss error"
             className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-amber-400/60 transition-colors hover:bg-zinc-700/60 hover:text-amber-200"
+          >
+            <svg width="9" height="9" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+      )}
+      {emptyTurn && (
+        <div className="mx-4 mb-2 flex items-start gap-2 rounded-md border border-zinc-700/70 bg-zinc-900/80 px-3 py-2">
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 16 16"
+            fill="none"
+            aria-hidden="true"
+            className="mt-0.5 shrink-0 text-zinc-400"
+          >
+            <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.3" />
+            <path d="M8 5v3.5M8 11.2v.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+          </svg>
+          <p className="min-w-0 flex-1 text-[11px] leading-relaxed text-zinc-300">
+            The model finished without producing an answer after{" "}
+            {emptyTurn.toolIterations > 0
+              ? `${emptyTurn.toolIterations} tool step${emptyTurn.toolIterations === 1 ? "" : "s"}`
+              : "analyzing"}{" "}
+            — it may have run out of room or hit a provider limit. Try “continue” to nudge it, or open a
+            new chat.
+          </p>
+          <button
+            type="button"
+            onClick={onDismissEmptyTurn}
+            aria-label="Dismiss notice"
+            className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
           >
             <svg width="9" height="9" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />

@@ -281,7 +281,8 @@ export interface ChatStreamState {
   busy: boolean;
   error: string | null;
   /** Set when a turn ends "successfully" but produced no text and no tool output. */
-  emptyTurn: boolean;
+  emptyTurn: { toolIterations: number } | null;
+  dismissEmptyTurn: () => void;
   dismissError: () => void;
   abort: () => void;
   stream: (text: string, attachments: ChatAttachment[]) => Promise<ChatStreamResult>;
@@ -489,6 +490,23 @@ function withTimeout<T>(ms: number, fn: () => Promise<T>, message: string): Prom
   });
 }
 
+const STREAM_LOG_KEY = "crackerbox.streamLog";
+
+// Persist a recent-activity capture (last 40 entries) so silent failures can be
+// reviewed after the fact — the watchdogs surface them, but only a log records
+// what actually happened to send back for debugging.
+function recordStreamLog(entry: Record<string, unknown>): void {
+  try {
+    const raw = localStorage.getItem(STREAM_LOG_KEY);
+    const list = raw ? (JSON.parse(raw) as unknown[]) : [];
+    list.push({ t: Date.now(), ...entry });
+    while (list.length > 40) list.shift();
+    localStorage.setItem(STREAM_LOG_KEY, JSON.stringify(list));
+  } catch {
+    // logging is best-effort
+  }
+}
+
 const NETWORK_RETRY_INITIAL_DELAY = 1000;
 const NETWORK_RETRY_MAX_DURATION = 20_000;
 
@@ -533,7 +551,7 @@ function statusReason(status: number, model: string): string {
 export function useChatStream(options: ChatStreamOptions): ChatStreamState {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [emptyTurn, setEmptyTurn] = useState(false);
+  const [emptyTurn, setEmptyTurn] = useState<{ toolIterations: number } | null>(null);
   const [approval, setApproval] = useState<PendingApproval | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const busyRef = useRef(false);
@@ -562,6 +580,8 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
   }, [options.activeProjectId]);
 
   const dismissError = useCallback(() => setError(null), []);
+
+  const dismissEmptyTurn = useCallback(() => setEmptyTurn(null), []);
 
   const abort = useCallback(() => {
     abortRef.current?.abort();
@@ -647,7 +667,7 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
       busyRef.current = true;
       setBusy(true);
       setError(null);
-      setEmptyTurn(false);
+      setEmptyTurn(null);
       approvalBatchRef.current = null;
 
       let assistantId = appendAssistant();
@@ -671,8 +691,19 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
       let accPrompt = 0;
       let accCompletion = 0;
 
+      recordStreamLog({
+        event: "stream_start",
+        model,
+        text: text.slice(0, 120),
+        historyMessages: messages.length,
+      });
+
       const finish = (result: ChatStreamResult): ChatStreamResult => {
-        setEmptyTurn(result.ok === true && receivedText === "" && toolIterations === 0);
+        setEmptyTurn(
+          result.ok === true && receivedText === "" && toolIterations === 0
+            ? { toolIterations }
+            : null
+        );
         if (accPrompt > 0 || accCompletion > 0) {
           try {
             onUsage?.(accPrompt, accCompletion);
@@ -847,6 +878,7 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
               continue;
             }
             if (isNetwork) {
+              recordStreamLog({ event: "network_exhausted", attempts: attempt });
               return gentleFail(NETWORK_RETRY_MESSAGE);
             }
             const message =
@@ -928,6 +960,7 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
           // We can't resume an SSE stream, but we preserve the partial message so
           // the user can nudge the model to continue rather than starting over.
           if (isNetworkError(e) || (typeof navigator !== "undefined" && navigator.onLine === false)) {
+            recordStreamLog({ event: "mid_stream_drop", receivedText: receivedText.length });
             return gentleFail(NETWORK_RETRY_MESSAGE);
           }
           const message =
@@ -936,7 +969,12 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
         }
 
         const callDrafts = [...drafts.values()].sort((a, b) => a.index - b.index);
-        if (callDrafts.length === 0) return finish({ ok: true, error: null });
+        if (callDrafts.length === 0) {
+          if (receivedText === "") {
+            recordStreamLog({ event: "empty_finish", toolIterations });
+          }
+          return finish({ ok: true, error: null });
+        }
 
         if (toolIterations >= MAX_TOOL_ITERATIONS) {
           return fail("Stopped: the model kept requesting tools beyond the iteration limit.");
@@ -951,6 +989,11 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
           status: "running",
         }));
         setAssistantToolCalls(assistantId, calls);
+        recordStreamLog({
+          event: "tool_calls",
+          count: calls.length,
+          names: calls.map((c) => c.name),
+        });
 
         workingPayload.push({
           role: "assistant",
@@ -1192,5 +1235,5 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
     []
   );
 
-  return { busy, error, emptyTurn, dismissError, abort, stream, approval, resolveApproval, resolveApprovalWithReply };
+  return { busy, error, emptyTurn, dismissEmptyTurn, dismissError, abort, stream, approval, resolveApproval, resolveApprovalWithReply };
 }

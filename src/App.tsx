@@ -1340,6 +1340,8 @@ export default function App() {
                 sendDisabledReason={sendBlockedReason}
                 streamError={chatStream.error}
                 onDismissStreamError={chatStream.dismissError}
+                emptyTurn={chatStream.emptyTurn}
+                onDismissEmptyTurn={chatStream.dismissEmptyTurn}
                 modelLabel={modelLabel}
                 visionSupported={visionSupported}
                 approval={chatStream.approval}
