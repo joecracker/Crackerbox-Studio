@@ -981,18 +981,32 @@ export function useChatStream(options: ChatStreamOptions): ChatStreamState {
         if (callDrafts.length === 0) {
           if (receivedText === "") {
             recordStreamLog({ event: "empty_finish", toolIterations });
-            // The model ran tools but then ended its turn with no text and no
-            // further tool call. Instead of stopping dead, nudge it ONCE to
-            // produce the actual answer using what it learned.
-            if (toolIterations > 0 && nudgedEmptyFinish < 1) {
+            if (toolIterations > 0) {
+              if (nudgedEmptyFinish === 0) {
+                // 1st empty end after tools: nudge it to answer.
+                nudgedEmptyFinish++;
+                workingPayload.push({
+                  role: "user",
+                  content:
+                    "Your recent tool results are in. There are no more tools to call for now — " +
+                    "please produce the final answer/implementation directly now. Do not call tools again.",
+                });
+                recordStreamLog({ event: "empty_finish_nudge" });
+                continue;
+              }
+              // 2nd empty end after tools: the model keeps looping on tools and
+              // never answers. Strip ALL tools so it physically cannot call them;
+              // it must write or reply.
               nudgedEmptyFinish++;
+              toolsTier = 0;
               workingPayload.push({
                 role: "user",
                 content:
-                  "Your recent tool results are in. There are no more tools to call for now — " +
-                  "please produce the final answer/implementation directly now. Do not call tools again.",
+                  "You are NOT being given tools to call this turn. Based on everything you have " +
+                  "already gathered, now write the change / give the answer directly in plain text " +
+                  "and finish. Do not mention tools.",
               });
-              recordStreamLog({ event: "empty_finish_nudge" });
+              recordStreamLog({ event: "empty_finish_force" });
               continue;
             }
             return finish({ ok: true, error: null });
