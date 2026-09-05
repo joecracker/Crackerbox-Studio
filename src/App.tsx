@@ -18,6 +18,7 @@ import GuardrailSettings from "./components/settings/GuardrailSettings";
 import IntegrationsSettings from "./components/settings/IntegrationsSettings";
 import ChatView from "./components/chat/ChatView";
 import ChatHistoryPanel from "./components/chat/ChatHistoryPanel";
+import DiagnosticsPanel from "./components/settings/DiagnosticsPanel";
 import TerminalPanel from "./components/terminal/TerminalPanel";
 import ParametersDialog from "./components/parameters/ParametersDialog";
 import { useOpenRouterCredits } from "./hooks/useOpenRouterCredits";
@@ -1314,6 +1315,9 @@ export default function App() {
                   <GuardrailSettings guardrails={guardrails} />
                 </div>
                 <IntegrationsSettings mcp={mcp} vault={vault} />
+                <div className="px-3 pb-4">
+                  <DiagnosticsPanel />
+                </div>
               </>
             )}
           </Sidebar>
