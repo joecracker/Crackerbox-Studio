@@ -7,6 +7,7 @@ interface PendingChangesCardProps {
   strategy: DeployStrategy;
   onStrategyChange: (strategy: DeployStrategy) => void;
   onDeployNow: () => void;
+  onClearDirty: () => void;
   busy: boolean;
   status: string | null;
   lastCheckAtLabel: string | null;
@@ -45,6 +46,7 @@ export default function PendingChangesCard({
   strategy,
   onStrategyChange,
   onDeployNow,
+  onClearDirty,
   busy,
   status,
   lastCheckAtLabel,
@@ -69,6 +71,16 @@ export default function PendingChangesCard({
           <span className="rounded-sm bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
             up to date
           </span>
+        )}
+        {activeDirty && (
+          <button
+            type="button"
+            onClick={onClearDirty}
+            title="Discard the pending-changes flag without deploying"
+            className="rounded border border-zinc-700 px-2 py-0.5 text-[10px] text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+          >
+            Clear pending
+          </button>
         )}
       </div>
 

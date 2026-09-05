@@ -19,6 +19,7 @@ interface DeployWizardProps {
   autoBusy: boolean;
   autoStatus: string | null;
   onDeployQueued: () => void;
+  onClearDirty: () => void;
   onDeploySuccess: (target: {
     repoName: string;
     siteName: string;
@@ -142,6 +143,7 @@ export default function DeployWizard({
   autoBusy,
   autoStatus,
   onDeployQueued,
+  onClearDirty,
   onDeploySuccess,
   onBuildBackupJson,
   onApplyBackupData,
@@ -303,6 +305,7 @@ export default function DeployWizard({
           strategy={settings.strategy}
           onStrategyChange={settings.setStrategy}
           onDeployNow={onDeployQueued}
+          onClearDirty={onClearDirty}
           busy={autoBusy || deploying}
           status={autoStatus}
           lastCheckAtLabel={lastCheckAtLabel}

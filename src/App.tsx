@@ -1297,6 +1297,7 @@ export default function App() {
                 autoBusy={autoDeploying}
                 autoStatus={autoDeployStatus}
                 onDeployQueued={() => void runQueuedDeploy()}
+                onClearDirty={() => deployQueue.clearDirty(projects.activeProjectId)}
                 onDeploySuccess={(target) => {
                   deploySettings.saveTarget(target);
                   deployQueue.clearDirty(projects.activeProjectId);
