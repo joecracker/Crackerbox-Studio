@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from "react";
+import { useEffect, useRef, useMemo, useState } from "react";
 import type { ChatMessage, ChatToolCall } from "../../hooks/useChatHistory";
 import { diffLines, diffStat } from "../../utils/diff";
 
@@ -201,6 +201,39 @@ function ToolActivity({ call }: { call: ChatToolCall }) {
   );
 }
 
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    try {
+      void navigator.clipboard.writeText(text).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      });
+    } catch {
+      // clipboard unavailable
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      title="Copy this message"
+      aria-label="Copy this message"
+      className={`ml-auto flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] transition-colors ${
+        copied
+          ? "border-emerald-700 text-emerald-300"
+          : "border-zinc-700 text-zinc-400 hover:bg-zinc-700/50 hover:text-zinc-200"
+      }`}
+    >
+      <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <rect x="5.5" y="5.5" width="8" height="8" rx="1" stroke="currentColor" strokeWidth="1.2" />
+        <path d="M3 10.5V3.5a1 1 0 0 1 1-1h7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      </svg>
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
+}
+
 function MessageBubble({ message, streaming }: { message: ChatMessage; streaming: boolean }) {
   const isUser = message.role === "user";
   const pending = !isUser && streaming && !message.text;
@@ -234,6 +267,7 @@ function MessageBubble({ message, streaming }: { message: ChatMessage; streaming
             ))}
           </div>
         )}
+        {!isUser && message.text && <CopyButton text={message.text} />}
       </div>
       <span className="mt-1 text-[10px] tabular-nums text-zinc-600">
         {isUser ? "You" : "Assistant"} · {formatTime(message.createdAt)}
